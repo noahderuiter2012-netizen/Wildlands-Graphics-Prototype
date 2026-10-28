@@ -778,7 +778,13 @@ function movePlayer(delta) {
 function updateCamera(delta) {
   if (!player) return;
 
-  const target = player.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+  // Keep the camera target anchored to the ground while the player jumps,
+  // otherwise the camera follows the vertical motion and hides the jump.
+  const target = new THREE.Vector3(
+    player.position.x,
+    terrainHeight(player.position.x, player.position.z) + 1.5,
+    player.position.z
+  );
   const horizontal = cameraDistance * Math.cos(pitch);
   const offset = new THREE.Vector3(
     Math.sin(yaw) * horizontal,
