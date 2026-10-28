@@ -223,7 +223,8 @@ function createTerrain() {
   const floorTexture = new THREE.CanvasTexture(canvas);
   floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
   floorTexture.repeat.set(9, 9); floorTexture.colorSpace = THREE.SRGBColorSpace; floorTexture.anisotropy = 4;
-  const groundMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, color: '#c4c9a7', vertexColors: true, roughness: 1, metalness: 0 });
+  // Reuse the procedural litter texture for subtle surface relief without extra draw calls.
+  const groundMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, bumpMap: floorTexture, bumpScale: 0.075, color: '#c4c9a7', vertexColors: true, roughness: 1, metalness: 0 });
   ground = new THREE.Mesh(geometry, groundMaterial);
   ground.receiveShadow = true;
   scene.add(ground);
@@ -457,6 +458,12 @@ function createForest() {
         o.castShadow = true;
         o.receiveShadow = true;
       });
+      // Imported GLBs use different origins. Align their actual lowest point to the terrain
+      // so trunks and fallen logs do not float above or sink beneath uneven ground.
+      model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(model);
+      if (Number.isFinite(bounds.min.y)) model.position.y += terrainHeight(x, z) - bounds.min.y;
+      model.updateMatrixWorld(true);
       scene.add(model);
       if (name.includes('Tree')) obstacles.push({ x, z, radius: 1.15 * scale });
     } catch (error) {
