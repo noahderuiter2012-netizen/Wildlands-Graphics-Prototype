@@ -173,19 +173,31 @@ function createTerrain() {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     pos.setY(i, terrainHeight(x, z));
-    const variation = THREE.MathUtils.clamp(0.38 + Math.sin(x * 0.045 + z * 0.031) * 0.18 + Math.sin(z * 0.13) * 0.07, 0, 1);
+    const height = pos.getY(i);
+    const fine = Math.sin(x*0.31 + Math.sin(z*0.19))*0.5 + Math.cos(z*0.37-x*0.12)*0.5;
+    const variation = THREE.MathUtils.clamp(0.4 + Math.sin(x * 0.045 + z * 0.031) * 0.15 + Math.sin(z * 0.13) * 0.06 + fine*0.045, 0, 1);
     const c = colorA.clone().lerp(colorB, variation);
-    const blend = (cx, cz, radius) => Math.max(0, 1 - Math.hypot(x-cx, z-cz) / radius);
-    const forest = blend(-74, 5, 58);
-    const cursed = blend(7, -20, 38);
-    const grass = blend(75, 24, 62);
-    const volcanic = blend(91, -71, 43);
-    const snow = Math.max(blend(-16, -105, 72), blend(38, -92, 48));
-    c.lerp(new THREE.Color('#40533a'), forest * 0.74);
-    c.lerp(new THREE.Color('#524b61'), cursed * 0.82);
-    c.lerp(new THREE.Color('#a0a078'), grass * 0.68);
-    c.lerp(new THREE.Color('#51433a'), volcanic * 0.86);
-    c.lerp(new THREE.Color('#b9c3c2'), snow * 0.92);
+    const blend = (cx, cz, radius, feather=0.22) => {
+      const d = Math.hypot(x-cx, z-cz)/radius;
+      const t = THREE.MathUtils.clamp((1-d)/feather,0,1);
+      return t*t*(3-2*t);
+    };
+    const forest = blend(-74, 5, 61, 0.48);
+    const cursed = blend(7, -20, 41, 0.42);
+    const grass = blend(75, 24, 65, 0.48);
+    const volcanic = blend(91, -71, 46, 0.4);
+    const snowRegion = Math.max(blend(-16, -105, 76, 0.42), blend(38, -92, 52, 0.4));
+    // Snow collects at altitude and on the northern plateau, with wind-scoured gaps.
+    const altitudeSnow = THREE.MathUtils.clamp((height-8.5)/9.5,0,1);
+    const snowNoise = THREE.MathUtils.clamp(0.72 + fine*0.24 + Math.sin(x*0.17+z*0.11)*0.12,0.28,1);
+    const snow = Math.max(snowRegion*0.72, altitudeSnow*snowNoise);
+    c.lerp(new THREE.Color('#40533a'), forest * 0.72);
+    c.lerp(new THREE.Color('#524b61'), cursed * 0.78);
+    c.lerp(new THREE.Color('#a0a078'), grass * 0.64);
+    // Dark ash and rusty mineral stains fade into the volcanic cone region.
+    c.lerp(new THREE.Color('#51433a'), volcanic * 0.82);
+    c.lerp(new THREE.Color('#343331'), volcanic * (0.12 + Math.max(0,fine)*0.12));
+    c.lerp(new THREE.Color('#b9c3c2'), snow * 0.88);
     colors.push(c.r, c.g, c.b);
   }
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
