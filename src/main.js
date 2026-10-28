@@ -278,17 +278,27 @@ function createMountains() {
     {x:46,z:115,w:45,d:28,h:18},{x:101,z:91,w:36,d:35,h:20}
   ];
   for (const r of ranges) {
-    const geo = new THREE.PlaneGeometry(r.w, r.d, 42, 42);
+    // Build each ridge from a dense grid with a jagged summit spine and broken shoulders.
+    const geo = new THREE.PlaneGeometry(r.w, r.d, 64, 64);
     geo.rotateX(-Math.PI / 2);
     const p = geo.attributes.position, colors = [];
+    const snowline = r.z < -72 ? 0.56 : 0.82;
     for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), z = p.getZ(i);
-      const edge = Math.max(Math.abs(x) / (r.w * 0.5), Math.abs(z) / (r.d * 0.5));
-      const ridge = Math.max(0, 1 - edge) * r.h;
-      const noise = (Math.sin((x + r.x) * 0.19) + Math.cos((z + r.z) * 0.16) + Math.sin((x + z) * 0.31)) * r.h * 0.07;
-      p.setY(i, Math.max(0, ridge + noise));
-      const c = new THREE.Color('#454c47').lerp(new THREE.Color('#85877c'), THREE.MathUtils.clamp((p.getY(i) / r.h) * 0.85 + rng() * 0.12, 0, 1));
-      colors.push(c.r,c.g,c.b);
+      const lx = p.getX(i), lz = p.getZ(i);
+      const nx = lx / (r.w * 0.5), nz = lz / (r.d * 0.5);
+      const edge = Math.max(Math.abs(nx), Math.abs(nz));
+      const envelope = Math.max(0, 1 - edge * edge);
+      const spine = Math.exp(-Math.pow((lx + Math.sin(lz*0.08)*r.w*0.12)/(r.w*0.22),2));
+      const crags = Math.abs(Math.sin((lx+r.x)*0.27)*Math.cos((lz+r.z)*0.23)) * r.h*0.12 + Math.sin((lx+lz)*0.47)*r.h*0.035;
+      const height = Math.max(0, envelope * (r.h * (0.48 + spine*0.52)) + crags*envelope);
+      p.setY(i, height);
+      const relative = height / r.h;
+      const rock = new THREE.Color('#373d3b').lerp(new THREE.Color('#85877e'), THREE.MathUtils.clamp(relative*1.2 + rng()*0.08,0,1));
+      if (relative > snowline) {
+        const snowBlend = THREE.MathUtils.clamp((relative-snowline)*4.2 + rng()*0.08,0,0.94);
+        rock.lerp(new THREE.Color('#d8e0dd'), snowBlend);
+      }
+      colors.push(rock.r,rock.g,rock.b);
     }
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors,3)); geo.computeVertexNormals();
     const mountain = new THREE.Mesh(geo, rockMat); mountain.position.set(r.x, -0.5, r.z); mountain.receiveShadow = true; scene.add(mountain);
@@ -357,7 +367,7 @@ function createRiver() {
     const direction = new THREE.Vector3().subVectors(after, before).normalize();
     const side = new THREE.Vector3(-direction.z, 0, direction.x);
     const width = 2.7 + Math.sin(i * 0.13) * 0.35;
-    const waterY = terrainHeight(p.x, p.z) - 0.12;
+    const waterY = terrainHeight(p.x, p.z) + 0.11;
     vertices.push(p.x + side.x * width, waterY, p.z + side.z * width,
                   p.x - side.x * width, waterY, p.z - side.z * width);
     if (i < points.length - 1) {
@@ -375,6 +385,34 @@ function createRiver() {
   }));
   water.receiveShadow = true;
   scene.add(water);
+
+  // Muddy, irregular banks sit just above the water edge; two slim ribbons follow the bend.
+  const bankMaterial = new THREE.MeshStandardMaterial({color:'#514a37',roughness:1,side:THREE.DoubleSide});
+  const pebbleMaterial = new THREE.MeshStandardMaterial({color:'#747366',roughness:1,flatShading:true});
+  for (const sign of [-1,1]) {
+    const verts=[],uv=[],idx=[];
+    for(let i=0;i<points.length;i++){
+      const p=points[i],before=points[Math.max(0,i-1)],after=points[Math.min(points.length-1,i+1)];
+      const dir=new THREE.Vector3().subVectors(after,before).normalize();
+      const side=new THREE.Vector3(-dir.z,0,dir.x).multiplyScalar(sign);
+      const inner=2.55+Math.sin(i*0.21)*0.28, outer=inner+1.15+Math.sin(i*0.37)*0.35;
+      const x1=p.x+side.x*inner,z1=p.z+side.z*inner,x2=p.x+side.x*outer,z2=p.z+side.z*outer;
+      verts.push(x1,terrainHeight(x1,z1)+0.16,z1,x2,terrainHeight(x2,z2)+0.12,z2);uv.push(0,i/14,1,i/14);
+      if(i<points.length-1){const a=i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2);}
+    }
+    const bankGeo=new THREE.BufferGeometry();bankGeo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));bankGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));bankGeo.setIndex(idx);bankGeo.computeVertexNormals();
+    const bank=new THREE.Mesh(bankGeo,bankMaterial);bank.receiveShadow=true;scene.add(bank);
+  }
+  // Scattered river stones, kept away from the open central spawn area.
+  const rng=randomGenerator(55418);const stoneGeo=new THREE.IcosahedronGeometry(0.5,1);
+  const stoneMesh=new THREE.InstancedMesh(stoneGeo,pebbleMaterial,110);const dummy=new THREE.Object3D();let count=0;
+  for(let i=0;i<110;i++){
+    const p=points[4+Math.floor(rng()*(points.length-8))];const dir=points[Math.min(points.length-1,4+Math.floor(rng()*(points.length-8)))];
+    const tangent=new THREE.Vector3().subVectors(dir,p).normalize();const side=new THREE.Vector3(-tangent.z,0,tangent.x);const sign=rng()<0.5?-1:1;
+    const x=p.x+side.x*sign*(3.1+rng()*2.2),z=p.z+side.z*sign*(3.1+rng()*2.2),s=0.18+rng()*0.48;
+    dummy.position.set(x,terrainHeight(x,z)+s*0.35,z);dummy.rotation.set(rng()*0.5,rng()*Math.PI,rng()*0.4);dummy.scale.set(s,s*(0.45+rng()*0.5),s*(0.8+rng()*0.5));dummy.updateMatrix();stoneMesh.setMatrixAt(count++,dummy.matrix);
+  }
+  stoneMesh.count=count;stoneMesh.castShadow=true;stoneMesh.receiveShadow=true;scene.add(stoneMesh);
 }
 
 function createForest() {
