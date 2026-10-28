@@ -598,7 +598,9 @@ function setupControls() {
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
       event.preventDefault();
     }
-    if (event.code === 'Space' && !event.repeat && gameStarted) jumpRequested = true;
+    if ((event.code === 'Space' || event.code === 'KeyJ') && !event.repeat && gameStarted) {
+      jumpRequested = true;
+    }
 
     if (event.code === 'Escape' && gameStarted) {
       intro.classList.remove('hidden');
@@ -637,10 +639,12 @@ function setupControls() {
   const joystick = document.querySelector('#joystick');
   const stick = document.querySelector('#stick');
   const jumpButton = document.querySelector('#jumpButton');
-  jumpButton.addEventListener('pointerdown', event => {
-    event.preventDefault();
+  const requestJump = event => {
+    event?.preventDefault?.();
     if (gameStarted) jumpRequested = true;
-  });
+  };
+  jumpButton.addEventListener('pointerdown', requestJump);
+  jumpButton.addEventListener('click', requestJump);
 
   const updateJoystick = event => {
     const rect = joystick.getBoundingClientRect();
@@ -703,12 +707,17 @@ function setupControls() {
 function movePlayer(delta) {
   if (!gameStarted) return;
 
-  // Jump is a one-shot request; gravity returns the player to the terrain.
-  if (jumpRequested && jumpHeight <= 0.001) jumpVelocity = 8.2;
+  // Strong, clearly visible jump arc. The request is consumed once per frame.
+  if (jumpRequested && jumpHeight <= 0.001) {
+    jumpVelocity = 14;
+    message.textContent = 'Jump!';
+  }
   jumpRequested = false;
-  jumpVelocity -= 20 * delta;
-  jumpHeight = Math.max(0, jumpHeight + jumpVelocity * delta);
-  if (jumpHeight === 0) jumpVelocity = 0;
+  if (jumpHeight > 0 || jumpVelocity > 0) {
+    jumpVelocity -= 26 * delta;
+    jumpHeight = Math.max(0, jumpHeight + jumpVelocity * delta);
+    if (jumpHeight === 0) jumpVelocity = 0;
+  }
 
   const forwardInput =
     (keys.KeyW || keys.ArrowUp ? 1 : 0) -
