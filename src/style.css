@@ -1,0 +1,469 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', sans-serif;
+  color: #f0f4e9;
+  background: #101b16;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --green: #a8d879;
+  --muted: #b7c5b5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  touch-action: none;
+}
+
+button {
+  font: inherit;
+}
+
+#game {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #18291f;
+  isolation: isolate;
+}
+
+#game canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  outline: none;
+  touch-action: none;
+}
+
+#game::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(9, 20, 14, 0.65), transparent 23%),
+    linear-gradient(0deg, rgba(8, 16, 12, 0.7), transparent 26%),
+    radial-gradient(ellipse at center, transparent 35%, rgba(5, 12, 8, 0.22) 100%);
+}
+
+#hud,
+#bottom-ui,
+#crosshair,
+#intro,
+#touch-controls,
+#error {
+  position: absolute;
+}
+
+#hud {
+  z-index: 3;
+  inset: 0 0 auto;
+  min-height: 110px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 26px;
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.brand-mark {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(194, 231, 158, 0.7);
+  background: rgba(22, 42, 29, 0.75);
+  color: var(--green);
+  font: 800 27px 'Barlow Condensed', sans-serif;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+.brand-name {
+  font: 800 23px 'Barlow Condensed', sans-serif;
+  letter-spacing: 3px;
+}
+
+.brand-sub {
+  margin-top: 2px;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #c2d0bd;
+}
+
+.status-panel {
+  width: 205px;
+  margin-left: auto;
+  padding: 12px 14px;
+  background: rgba(10, 23, 15, 0.68);
+  border: 1px solid rgba(215, 233, 201, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+}
+
+.status-line span:last-child {
+  color: #e7f3df;
+}
+
+.bar {
+  height: 5px;
+  margin-bottom: 11px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.bar:last-child {
+  margin-bottom: 0;
+}
+
+.bar > div {
+  height: 100%;
+  width: 100%;
+  transition: width 0.12s linear;
+}
+
+.health-fill {
+  background: linear-gradient(90deg, #b45b48, #e49a6d);
+}
+
+.stamina-fill {
+  background: linear-gradient(90deg, #659d49, #b3dc7e);
+}
+
+#location {
+  position: absolute;
+  top: 126px;
+  left: 27px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #e0e9d8;
+  text-shadow: 0 2px 10px #08100a;
+}
+
+#message {
+  position: absolute;
+  top: 151px;
+  left: 27px;
+  max-width: 270px;
+  color: #d4e0cd;
+  font-size: 12px;
+  text-shadow: 0 2px 8px #08100a;
+}
+
+#crosshair {
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(240, 247, 226, 0.9);
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#bottom-ui {
+  z-index: 3;
+  left: 26px;
+  right: 26px;
+  bottom: 21px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #e2eadc;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-shadow: 0 2px 8px #07110a;
+  pointer-events: none;
+}
+
+.objective {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.objective-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(168, 216, 121, 0.7);
+}
+
+#coordinates {
+  color: #d3dfcc;
+  font-variant-numeric: tabular-nums;
+}
+
+.overlay {
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 13, 8, 0.36);
+  backdrop-filter: blur(3px);
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.intro-card {
+  width: min(510px, 100%);
+  padding: clamp(24px, 5vw, 46px);
+  background: linear-gradient(145deg, rgba(19, 37, 25, 0.96), rgba(9, 20, 14, 0.95));
+  border: 1px solid rgba(188, 225, 155, 0.35);
+  box-shadow: 0 25px 100px rgba(0, 0, 0, 0.45);
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+.intro-card h1 {
+  margin: 19px 0 14px;
+  font: 800 clamp(44px, 10vw, 78px)/0.87 'Barlow Condensed', sans-serif;
+  letter-spacing: 1px;
+}
+
+.intro-card h1 span {
+  color: var(--green);
+}
+
+.intro-card p {
+  max-width: 360px;
+  margin: 20px 0 28px;
+  color: #c4d1c0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+#startButton {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 18px;
+  border: 1px solid #c4e5a4;
+  background: #a7d879;
+  color: #142218;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+#startButton:hover {
+  background: #c0ed94;
+  transform: translateY(-1px);
+}
+
+#startButton span {
+  font-size: 20px;
+}
+
+.controls-note {
+  margin-top: 17px;
+  color: #91a38b;
+  font-size: 9px;
+  line-height: 1.6;
+  letter-spacing: 1px;
+}
+
+#touch-controls {
+  z-index: 4;
+  display: none;
+  inset: auto 0 52px;
+  height: 140px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  pointer-events: none;
+}
+
+#touch-controls.visible {
+  display: flex;
+}
+
+#joystick {
+  width: 116px;
+  height: 116px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(230, 243, 220, 0.35);
+  border-radius: 50%;
+  background: rgba(11, 26, 17, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#stick {
+  width: 43px;
+  height: 43px;
+  border: 1px solid rgba(220, 241, 204, 0.65);
+  border-radius: 50%;
+  background: rgba(177, 218, 137, 0.62);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+}
+
+#sprintButton {
+  width: 78px;
+  height: 78px;
+  border: 1px solid rgba(219, 241, 200, 0.6);
+  border-radius: 50%;
+  background: rgba(25, 54, 33, 0.72);
+  color: #e8f6df;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#sprintButton.active {
+  background: #a7d879;
+  color: #142218;
+}
+
+#error {
+  z-index: 10;
+  inset: auto 12px 12px;
+  padding: 14px;
+  background: #421e1b;
+  border: 1px solid #d68c79;
+  color: white;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#error[hidden] {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  #hud {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 35px;
+    height: 35px;
+    font-size: 22px;
+  }
+
+  .brand-name {
+    font-size: 18px;
+    letter-spacing: 2px;
+  }
+
+  .brand-sub {
+    max-width: 145px;
+    font-size: 7px;
+    letter-spacing: 0.8px;
+  }
+
+  .status-panel {
+    width: 132px;
+    padding: 9px;
+  }
+
+  .status-line {
+    font-size: 9px;
+    letter-spacing: 0.8px;
+  }
+
+  #location {
+    top: 102px;
+    left: 15px;
+    font-size: 9px;
+  }
+
+  #message {
+    top: 122px;
+    left: 15px;
+    font-size: 11px;
+  }
+
+  #bottom-ui {
+    left: 15px;
+    right: 15px;
+    bottom: 15px;
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+
+  .objective {
+    max-width: 65%;
+    gap: 6px;
+  }
+
+  #touch-controls {
+    bottom: 38px;
+    padding: 0 17px;
+  }
+}
+
+@media (max-height: 500px) {
+  #hud {
+    padding-top: 10px;
+  }
+
+  #touch-controls {
+    bottom: 25px;
+  }
+
+  #joystick {
+    width: 90px;
+    height: 90px;
+  }
+
+  #sprintButton {
+    width: 65px;
+    height: 65px;
+  }
+}
