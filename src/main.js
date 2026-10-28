@@ -61,6 +61,7 @@ const startButton = document.querySelector('#startButton');
 const errorBox = document.querySelector('#error');
 
 let scene, camera, cameraRig, renderer, clock;
+let riverRippleTexture;
 let player, playerGroup, ground;
 let running = false;
 let gameStarted = false;
@@ -412,12 +413,58 @@ function createRiver() {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const water = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-    color: '#315c5a', roughness: 0.18, metalness: 0.12, transparent: true,
-    opacity: 0.9, side: THREE.DoubleSide
-  }));
-  water.receiveShadow = true;
+  // Layered river materials: a deep base, subtle moving ripples and a narrow bright flow line.
+  const waterMat = new THREE.MeshPhysicalMaterial({
+    color: '#356a68', roughness: 0.22, metalness: 0.08, transparent: true,
+    opacity: 0.88, clearcoat: 0.72, clearcoatRoughness: 0.24,
+    side: THREE.DoubleSide
+  });
+  const water = new THREE.Mesh(geometry, waterMat);
+  water.receiveShadow = false;
+  water.name = 'RiverWaterSurface';
   scene.add(water);
+
+  // Procedural ripple texture animates gently without adding extra geometry or draw calls.
+  const rippleCanvas = document.createElement('canvas');
+  rippleCanvas.width = rippleCanvas.height = 256;
+  const rippleCtx = rippleCanvas.getContext('2d');
+  rippleCtx.fillStyle = '#849c91'; rippleCtx.fillRect(0, 0, 256, 256);
+  const rippleRng = randomGenerator(5317);
+  for (let i = 0; i < 1150; i++) {
+    const x = rippleRng()*256, y = rippleRng()*256;
+    rippleCtx.strokeStyle = `rgba(220,239,218,${0.06+rippleRng()*0.25})`;
+    rippleCtx.lineWidth = 0.35+rippleRng()*1.25;
+    rippleCtx.beginPath(); rippleCtx.ellipse(x,y,2+rippleRng()*8,0.5+rippleRng()*1.8,rippleRng()*0.25,0,Math.PI*1.25); rippleCtx.stroke();
+  }
+  const rippleTexture = new THREE.CanvasTexture(rippleCanvas);
+  riverRippleTexture = rippleTexture;
+  rippleTexture.wrapS = rippleTexture.wrapT = THREE.RepeatWrapping;
+  rippleTexture.repeat.set(2.5, 1.2); rippleTexture.colorSpace = THREE.SRGBColorSpace;
+  rippleTexture.anisotropy = 4;
+  waterMat.map = rippleTexture;
+  waterMat.bumpMap = rippleTexture; waterMat.bumpScale = 0.045;
+  waterMat.needsUpdate = true;
+
+  // Soft broken highlights on the surface help the river read as moving water from a distance.
+  const glintMaterial = new THREE.MeshBasicMaterial({ color: '#b2d5c3', transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false });
+  const glintGeometry = new THREE.BufferGeometry();
+  const glintVertices = [];
+  for (let i = 4; i < points.length - 4; i += 5) {
+    const p = points[i], before = points[i-1], after = points[i+1];
+    const direction = new THREE.Vector3().subVectors(after,before).normalize();
+    const side = new THREE.Vector3(-direction.z,0,direction.x);
+    const offset = Math.sin(i*2.17)*1.2;
+    const cx = p.x + side.x*offset, cz = p.z + side.z*offset;
+    const length = 0.35 + (Math.sin(i*1.73)+1)*0.55;
+    const half = 0.025 + (Math.cos(i*0.91)+1)*0.035;
+    const y = terrainHeight(p.x,p.z)+0.145;
+    glintVertices.push(cx-direction.x*length,y,cz-direction.z*length, cx+side.x*half,y,cz+side.z*half, cx+direction.x*length,y,cz+direction.z*length, cx-side.x*half,y,cz-side.z*half);
+  }
+  const glintIndices=[];
+  for(let i=0;i<glintVertices.length/3;i+=4) glintIndices.push(i,i+1,i+2,i,i+2,i+3);
+  glintGeometry.setAttribute('position',new THREE.Float32BufferAttribute(glintVertices,3));
+  glintGeometry.setIndex(glintIndices); glintGeometry.computeVertexNormals();
+  const glints = new THREE.Mesh(glintGeometry,glintMaterial); glints.name='RiverSurfaceGlints'; scene.add(glints);
 
   // Muddy, irregular banks sit just above the water edge; two slim ribbons follow the bend.
   const bankMaterial = new THREE.MeshStandardMaterial({color:'#514a37',roughness:1,side:THREE.DoubleSide});
@@ -994,6 +1041,7 @@ function updateCamera(delta) {
 }
 
 function animate() {
+  if (riverRippleTexture) { riverRippleTexture.offset.x = (riverRippleTexture.offset.x + 0.00035) % 1; riverRippleTexture.offset.y = (riverRippleTexture.offset.y + 0.00008) % 1; }
   const delta = Math.min(clock.getDelta(), 0.04);
   worldTime += delta;
 
