@@ -149,10 +149,16 @@ function randomGenerator(seed = 92381) {
 const random = randomGenerator();
 
 function terrainHeight(x, z) {
-  // Broad, overlapping height waves make the ground gently roll without noisy, game-like spikes.
-  return (Math.sin(x * 0.035 + Math.cos(z * 0.027)) * 1.25 +
-    Math.cos(z * 0.044 - x * 0.018) * 0.8 +
-    Math.sin((x + z) * 0.075) * 0.22) * 0.72;
+  // Map 2 macro-terrain: snowy northern spine, western highlands, volcanic northeast,
+  // and a raised, broken rim around the central Cursed Lands.
+  const ridge = (cx, cz, sx, sz, h) => h * Math.exp(-(((x-cx)/sx)**2 + ((z-cz)/sz)**2));
+  const rolling = Math.sin(x * 0.035 + Math.cos(z * 0.027)) * 0.85 +
+    Math.cos(z * 0.044 - x * 0.018) * 0.58 + Math.sin((x + z) * 0.075) * 0.2;
+  const northernRange = ridge(-15, -103, 90, 25, 18) + ridge(42, -92, 48, 23, 11);
+  const westernMountains = ridge(-94, -58, 28, 45, 15) + ridge(-104, 4, 22, 40, 8);
+  const volcano = ridge(91, -71, 28, 27, 21);
+  const cursedRim = ridge(7, -20, 32, 27, 3.4);
+  return rolling + northernRange + westernMountains + volcano + cursedRim;
 }
 
 function createTerrain() {
@@ -169,6 +175,17 @@ function createTerrain() {
     pos.setY(i, terrainHeight(x, z));
     const variation = THREE.MathUtils.clamp(0.38 + Math.sin(x * 0.045 + z * 0.031) * 0.18 + Math.sin(z * 0.13) * 0.07, 0, 1);
     const c = colorA.clone().lerp(colorB, variation);
+    const blend = (cx, cz, radius) => Math.max(0, 1 - Math.hypot(x-cx, z-cz) / radius);
+    const forest = blend(-74, 5, 58);
+    const cursed = blend(7, -20, 38);
+    const grass = blend(75, 24, 62);
+    const volcanic = blend(91, -71, 43);
+    const snow = Math.max(blend(-16, -105, 72), blend(38, -92, 48));
+    c.lerp(new THREE.Color('#40533a'), forest * 0.74);
+    c.lerp(new THREE.Color('#524b61'), cursed * 0.82);
+    c.lerp(new THREE.Color('#a0a078'), grass * 0.68);
+    c.lerp(new THREE.Color('#51433a'), volcanic * 0.86);
+    c.lerp(new THREE.Color('#b9c3c2'), snow * 0.92);
     colors.push(c.r, c.g, c.b);
   }
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -250,11 +267,15 @@ function createMountains() {
   const rng = randomGenerator(40819);
   const rockMat = new THREE.MeshStandardMaterial({ color: '#62675e', roughness: 1, flatShading: false, vertexColors: true });
   const ranges = [
-    {x:-112,z:-95,w:40,d:34,h:30},{x:-54,z:-112,w:48,d:38,h:25},
-    {x:8,z:-116,w:48,d:34,h:34},{x:73,z:-105,w:43,d:38,h:28},
-    {x:116,z:-66,w:36,d:44,h:26},{x:-118,z:8,w:32,d:46,h:27},
-    {x:-113,z:76,w:44,d:36,h:31},{x:-48,z:112,w:44,d:34,h:23},
-    {x:22,z:114,w:50,d:38,h:30},{x:91,z:104,w:42,d:38,h:25},{x:118,z:48,w:34,d:42,h:28}
+    // Tall snow spine across the north, with a broken western mountain chain.
+    {x:-88,z:-91,w:39,d:45,h:28},{x:-48,z:-108,w:50,d:34,h:34},
+    {x:4,z:-112,w:52,d:38,h:40},{x:52,z:-104,w:44,d:37,h:33},
+    {x:88,z:-87,w:35,d:38,h:27},
+    {x:-105,z:-48,w:34,d:42,h:29},{x:-111,z:-4,w:31,d:40,h:22},
+    {x:-100,z:39,w:39,d:37,h:25},
+    // Lower southern coastal ridges frame the Riverlands without sealing the region.
+    {x:-70,z:111,w:45,d:27,h:17},{x:-15,z:119,w:43,d:25,h:16},
+    {x:46,z:115,w:45,d:28,h:18},{x:101,z:91,w:36,d:35,h:20}
   ];
   for (const r of ranges) {
     const geo = new THREE.PlaneGeometry(r.w, r.d, 42, 42);
@@ -288,18 +309,39 @@ function createMountains() {
     const scale = 1.2 + rng() * 4.8; rock.scale.set(scale, scale * (0.55 + rng()*0.6), scale * (0.8 + rng()*0.8));
     rock.position.set(x, rock.scale.y * 0.45 - 0.2, z); rock.rotation.set(rng()*0.3, rng()*Math.PI, rng()*0.25); rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
   }
+  // Volcanic Region landmark: a dark, broad cone with a glowing crater and branching lava scars.
+  const volcano = new THREE.Mesh(new THREE.ConeGeometry(24, 30, 48, 8, false), new THREE.MeshStandardMaterial({color:'#302d2a', roughness:1, flatShading:true}));
+  volcano.position.set(91, 9, -71); volcano.scale.set(1.2, 1, 1.05); volcano.castShadow = true; volcano.receiveShadow = true; scene.add(volcano);
+  const lavaMat = new THREE.MeshStandardMaterial({color:'#ff5a18', emissive:'#e33108', emissiveIntensity:2.2, roughness:0.45});
+  const crater = new THREE.Mesh(new THREE.TorusGeometry(4.8, 1.05, 8, 32), lavaMat); crater.rotation.x = Math.PI/2; crater.position.set(91, 23.2, -71); scene.add(crater);
+  for (const path of [[91,-71,83,-54],[91,-71,101,-82],[91,-71,107,-61],[91,-71,78,-83]]) {
+    const pts = [new THREE.Vector3(path[0],20,path[1]),new THREE.Vector3((path[0]+path[2])/2,9,(path[1]+path[3])/2),new THREE.Vector3(path[2],terrainHeight(path[2],path[3])+0.3,path[3])];
+    const lava = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),18,0.42,6,false),lavaMat); scene.add(lava);
+  }
+  // Cursed Lands boundary stones: weathered pillars with restrained violet energy.
+  const cursedRock = new THREE.MeshStandardMaterial({color:'#38343f', roughness:0.96});
+  const cursedGlow = new THREE.MeshStandardMaterial({color:'#7b55b7', emissive:'#44216f', emissiveIntensity:1.15, roughness:0.55});
+  for (let i=0;i<11;i++) {
+    const a=i/11*Math.PI*2, x=7+Math.cos(a)*29, z=-20+Math.sin(a)*25;
+    const h=3.2+rng()*3.6;
+    const pillar=new THREE.Mesh(new THREE.DodecahedronGeometry(1.25,1),cursedRock);
+    pillar.position.set(x,terrainHeight(x,z)+h*0.42,z); pillar.scale.set(0.8,h,0.9); pillar.rotation.set(rng()*0.3,rng()*Math.PI,rng()*0.2); pillar.castShadow=true; scene.add(pillar);
+    const shard=new THREE.Mesh(new THREE.OctahedronGeometry(0.24+rng()*0.22,0),cursedGlow);
+    shard.position.set(x,terrainHeight(x,z)+h*0.95,z); shard.rotation.set(0, a, 0.35); scene.add(shard);
+  }
 }
 
 const riverCurve = new THREE.CatmullRomCurve3([
-  new THREE.Vector3(-125, 0, -55),
-  new THREE.Vector3(-80, 0, -38),
-  new THREE.Vector3(-48, 0, -8),
-  new THREE.Vector3(-22, 0, 20),
-  new THREE.Vector3(5, 0, 28),
-  new THREE.Vector3(38, 0, 12),
-  new THREE.Vector3(65, 0, -12),
-  new THREE.Vector3(100, 0, -5),
-  new THREE.Vector3(125, 0, 20)
+  new THREE.Vector3(-126, 7, 18),
+  new THREE.Vector3(-98, 0, 42),
+  new THREE.Vector3(-77, 0, 74),
+  new THREE.Vector3(-47, 0, 96),
+  new THREE.Vector3(-12, 0, 83),
+  new THREE.Vector3(15, 0, 66),
+  new THREE.Vector3(43, 0, 79),
+  new THREE.Vector3(70, 0, 61),
+  new THREE.Vector3(92, 0, 37),
+  new THREE.Vector3(126, 0, 27)
 ]);
 
 function createRiver() {
@@ -736,6 +778,9 @@ function movePlayer(delta) {
 
   document.querySelector('#coordinates').textContent =
     `X ${Math.round(player.position.x)} · Z ${Math.round(player.position.z)}`;
+  const px = player.position.x, pz = player.position.z;
+  const region = pz < -79 ? 'SNOWY PEAKS' : (px > 62 && pz < -43 ? 'VOLCANIC REGION' : (Math.hypot((px+7)/1.05, pz+20) < 35 ? 'CURSED LANDS' : (px < -42 && pz < 62 ? 'ANCIENT FOREST' : (pz > 53 ? 'RIVERLANDS' : (px > 35 ? 'GRASSLANDS' : (px < -76 ? 'MOUNTAINS' : 'THE WILDS'))))));
+  document.querySelector('#location').textContent = '✦ ' + region;
 
   if (sprinting) message.textContent = 'Moving fast — stamina draining.';
   else if (stamina < 25) message.textContent = 'Stamina low — slow down to recover.';
