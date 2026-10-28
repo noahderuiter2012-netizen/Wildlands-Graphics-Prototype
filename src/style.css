@@ -467,3 +467,22 @@ button {
     height: 65px;
   }
 }
+
+#jumpButton {
+  width: 78px;
+  height: 78px;
+  border: 1px solid rgba(219, 241, 200, 0.6);
+  border-radius: 50%;
+  background: rgba(57, 77, 39, 0.82);
+  color: #f0f7e8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#jumpButton:active {
+  background: #a7d879;
+  color: #142218;
+}
