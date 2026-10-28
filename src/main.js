@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import './style.css';
 
 const app = document.querySelector('#app');
@@ -484,102 +485,34 @@ function createGrass() {
 }
 
 function createForest() {
-  // Tree placement leaves an open starting clearing.
-  for (let i = 0; i < 520; i++) {
-    const x = (random() - 0.5) * (WORLD_SIZE - 12);
-    const z = (random() - 0.5) * (WORLD_SIZE - 12);
-
-    if (Math.hypot(x, z) < 13) continue;
-
-    // Keep the immediate river channel open.
-    const riverPoint = riverCurve.getPoint(
-      THREE.MathUtils.clamp((x + 125) / 250, 0, 1)
-    );
-    if (Math.hypot(x - riverPoint.x, z - riverPoint.z) < 6.8) continue;
-
-    createTree(x, z, 0.7 + random() * 0.8);
-  }
-
-  // Scatter boulders through the woodland.
-  const rockMats = [
-    material('#51594f'),
-    material('#62685b'),
-    material('#414b43')
-  ];
-
-  for (let i = 0; i < 105; i++) {
-    const x = (random() - 0.5) * (WORLD_SIZE - 20);
-    const z = (random() - 0.5) * (WORLD_SIZE - 20);
-    if (Math.hypot(x, z) < 10) continue;
-
-    const rock = addMesh(
-      new THREE.DodecahedronGeometry(0.7 + random() * 1.7, 1),
-      rockMats[Math.floor(random() * rockMats.length)],
-      x,
-      terrainHeight(x, z) + 0.3,
-      z
-    );
-    rock.scale.set(1 + random(), 0.65 + random() * 0.6, 0.8 + random() * 0.8);
-    rock.rotation.set(random(), random() * 3, random());
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    obstacles.push({ x, z, radius: 1.2 });
-  }
-
-  // Forest floor details: patches of ferns.
-  const fernMat = material('#486b3d');
-  for (let i = 0; i < 170; i++) {
-    const x = (random() - 0.5) * 220;
-    const z = (random() - 0.5) * 220;
-    const group = new THREE.Group();
-    group.position.set(x, terrainHeight(x, z) + 0.05, z);
-
-    for (let j = 0; j < 4; j++) {
-      const leaf = addMesh(
-        new THREE.ConeGeometry(0.14, 1.1 + random() * 0.5, 5),
-        fernMat,
-        (random() - 0.5) * 0.65,
-        0.45,
-        (random() - 0.5) * 0.65,
-        group
-      );
-      leaf.rotation.z = (random() - 0.5) * 0.9;
-      leaf.rotation.x = (random() - 0.5) * 0.7;
+  // Use a complete, pre-made CC0 woodland asset pack instead of generating trees from primitives.
+  // The scene contains multiple tree species, undergrowth, deadwood, rocks and forest-floor detail.
+  const loader = new GLTFLoader();
+  const forestStatus = document.querySelector('#message');
+  forestStatus.textContent = 'Loading forest assets…';
+  loader.load(
+    'https://cdn.3dassets.dev/assets/28437/v1/model.glb',
+    gltf => {
+      const woodland = gltf.scene;
+      woodland.name = 'PrebuiltTemperateWoodland';
+      woodland.scale.setScalar(3.25);
+      woodland.position.set(0, -0.1, -5);
+      woodland.traverse(object => {
+        if (!object.isMesh) return;
+        object.castShadow = true;
+        object.receiveShadow = true;
+        // Keep source materials and colour variation; do not flatten the pack into one tint.
+      });
+      scene.add(woodland);
+      forestStatus.textContent = 'Forest assets loaded.';
+    },
+    undefined,
+    error => {
+      console.error('Could not load the pre-made woodland asset pack:', error);
+      forestStatus.textContent = 'Forest asset loading failed. Check your connection and reload.';
     }
-    scene.add(group);
-  }
-
-  // Batched leaf litter and moss flecks add ground variation with only one draw call.
-  const litterPositions = [];
-  const litterColors = [];
-  const litterPalette = [new THREE.Color('#6b6542'), new THREE.Color('#4b5734'), new THREE.Color('#76694a'), new THREE.Color('#35452c')];
-  for (let i = 0; i < 620; i++) {
-    const x = (random() - 0.5) * 220;
-    const z = (random() - 0.5) * 220;
-    if (Math.hypot(x, z) < 8) continue;
-    const y = terrainHeight(x, z) + 0.035;
-    const length = 0.12 + random() * 0.34;
-    const width = 0.035 + random() * 0.09;
-    const angle = random() * Math.PI;
-    const dx = Math.cos(angle) * length;
-    const dz = Math.sin(angle) * length;
-    const wx = -Math.sin(angle) * width;
-    const wz = Math.cos(angle) * width;
-    litterPositions.push(x - dx, y, z - dz, x + dx, y, z + dz, x + wx, y + 0.01, z + wz);
-    const color = litterPalette[Math.floor(random() * litterPalette.length)];
-    for (let k = 0; k < 3; k++) litterColors.push(color.r, color.g, color.b);
-  }
-  const litterGeometry = new THREE.BufferGeometry();
-  litterGeometry.setAttribute('position', new THREE.Float32BufferAttribute(litterPositions, 3));
-  litterGeometry.setAttribute('color', new THREE.Float32BufferAttribute(litterColors, 3));
-  litterGeometry.computeVertexNormals();
-  const litter = new THREE.Mesh(litterGeometry, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 1 }));
-  litter.frustumCulled = true;
-  scene.add(litter);
-
-  createGrass();
+  );
 }
-
 function createPlayer() {
   playerGroup = new THREE.Group();
 
