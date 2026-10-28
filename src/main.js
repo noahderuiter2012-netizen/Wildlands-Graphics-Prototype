@@ -318,16 +318,18 @@ function createTree(x, z, scale = 1) {
     const radius = (3.0 * (1 - progress) + 0.3) * (0.72 + random() * 0.48);
     const height = 2.5 + random() * 1.45;
     const crown = addMesh(
-      new THREE.ConeGeometry(radius, height, 8 + Math.floor(random() * 3), 2),
+      new THREE.IcosahedronGeometry(radius, 1),
       leaves[Math.floor(random() * leaves.length)],
       (random() - 0.5) * 1.35,
-      crownY + layer * (1.02 + random() * 0.25),
+      crownY + layer * (0.82 + random() * 0.22),
       (random() - 0.5) * 1.35,
       group
     );
+    // Faceted, asymmetrical foliage clumps create a broader, less artificial canopy.
+    crown.scale.set(0.82 + random() * 0.42, height / (radius * 2), 0.78 + random() * 0.46);
     crown.rotation.y = random() * Math.PI;
-    crown.rotation.z = (random() - 0.5) * 0.14;
-    crown.rotation.x = (random() - 0.5) * 0.1;
+    crown.rotation.z = (random() - 0.5) * 0.24;
+    crown.rotation.x = (random() - 0.5) * 0.2;
     crown.castShadow = true;
     crown.receiveShadow = true;
   }
