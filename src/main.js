@@ -149,12 +149,8 @@ function randomGenerator(seed = 92381) {
 const random = randomGenerator();
 
 function terrainHeight(x, z) {
-  return (
-    Math.sin(x * 0.035) * 1.6 +
-    Math.cos(z * 0.04) * 1.3 +
-    Math.sin((x + z) * 0.021) * 2.2 +
-    Math.cos((x - z) * 0.032) * 0.8
-  );
+  // The rebuilt map uses a level base while imported ground modules are being assembled.
+  return 0;
 }
 
 function createTerrain() {
@@ -401,7 +397,6 @@ function createForest() {
   const assets = {
     tree: 'https://cdn.3dassets.dev/assets/36137/v1/model.glb',
     log: 'https://cdn.3dassets.dev/assets/36143/v1/model.glb',
-    floor: 'https://cdn.3dassets.dev/assets/36160/v1/model.glb'
   };
   const cache = new Map();
   const loadModel = url => new Promise((resolve, reject) => {
@@ -453,9 +448,6 @@ function createForest() {
   }
   const logs = [[-26,-30,1.0],[25,-31,0.85],[-57,31,0.9],[59,35,1.0],[-78,2,0.8],[81,-5,0.9]];
   logs.forEach(([x,z,s],i) => addInstance(assets.log,x,z,s,(i*1.1)%Math.PI,'ImportedFallenLog'));
-  // A separate, light scattering of the complete scene asset adds background depth only.
-  // Kept small and behind the foreground tree line to avoid the former clumped-up starting view.
-  addInstance(assets.floor, -8, -92, 0.42, 0, 'DistantWoodlandBackdrop');
   setTimeout(() => {
     if (status.textContent.includes('Loading')) status.textContent = 'Woodland models placed — explore the open river corridor.';
   }, 9000);
