@@ -269,57 +269,79 @@ function createTree(x, z, scale = 1) {
   group.scale.setScalar(scale);
 
   const trunkMat = material(random() > 0.5 ? '#4d3827' : '#60452d');
+  const barkLight = material('#735238');
   const leaves = [
     material('#183a28'),
     material('#21462d'),
     material('#2b5032'),
-    material('#34583a')
+    material('#34583a'),
+    material('#3b6040')
   ];
 
   const trunkHeight = 4.5 + random() * 3.5;
   const trunk = addMesh(
-    new THREE.CylinderGeometry(0.28, 0.52, trunkHeight, 7),
+    new THREE.CylinderGeometry(0.24, 0.68, trunkHeight, 8, 2),
     trunkMat,
     0,
     trunkHeight / 2,
     0,
     group
   );
-  trunk.rotation.z = (random() - 0.5) * 0.07;
+  trunk.rotation.z = (random() - 0.5) * 0.1;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+
+  // Uneven root flares make the trunks feel anchored in the forest floor.
+  for (let rootIndex = 0; rootIndex < 2; rootIndex++) {
+    const root = addMesh(
+      new THREE.CylinderGeometry(0.035, 0.24 + random() * 0.12, 1.15 + random() * 0.45, 5),
+      rootIndex === 0 ? trunkMat : barkLight,
+      (random() - 0.5) * 0.48,
+      0.28,
+      (random() - 0.5) * 0.48,
+      group
+    );
+    root.rotation.z = (random() < 0.5 ? -1 : 1) * (0.65 + random() * 0.3);
+    root.rotation.y = random() * Math.PI;
+    root.castShadow = true;
+  }
 
   const crownY = trunkHeight * 0.48;
   const layerCount = 5;
 
   for (let layer = 0; layer < layerCount; layer++) {
     const progress = layer / layerCount;
-    const radius = (2.9 * (1 - progress) + 0.35) * (0.82 + random() * 0.32);
-    const height = 2.7 + random() * 1.1;
+    const radius = (3.0 * (1 - progress) + 0.3) * (0.72 + random() * 0.48);
+    const height = 2.5 + random() * 1.45;
     const crown = addMesh(
-      new THREE.ConeGeometry(radius, height, 9, 2),
+      new THREE.ConeGeometry(radius, height, 8 + Math.floor(random() * 3), 2),
       leaves[Math.floor(random() * leaves.length)],
-      (random() - 0.5) * 0.9,
-      crownY + layer * 1.15,
-      (random() - 0.5) * 0.9,
+      (random() - 0.5) * 1.35,
+      crownY + layer * (1.02 + random() * 0.25),
+      (random() - 0.5) * 1.35,
       group
     );
     crown.rotation.y = random() * Math.PI;
-    crown.rotation.z = (random() - 0.5) * 0.09;
+    crown.rotation.z = (random() - 0.5) * 0.14;
+    crown.rotation.x = (random() - 0.5) * 0.1;
     crown.castShadow = true;
     crown.receiveShadow = true;
   }
 
-  // A few low branches make the silhouette less uniform.
-  for (let i = 0; i < 2; i++) {
+  // Branches point in varied directions instead of forming a repeated pair.
+  for (let i = 0; i < 3; i++) {
     const branch = addMesh(
-      new THREE.CylinderGeometry(0.09, 0.2, 2.2, 5),
+      new THREE.CylinderGeometry(0.055, 0.19, 1.8 + random() * 0.8, 5),
       trunkMat,
-      (random() - 0.5) * 1.2,
-      trunkHeight * (0.55 + i * 0.12),
-      0,
+      (random() - 0.5) * 1.1,
+      trunkHeight * (0.5 + i * 0.11),
+      (random() - 0.5) * 1.1,
       group
     );
-    branch.rotation.z = -0.75 + random() * 0.4;
+    branch.rotation.z = (random() < 0.5 ? -1 : 1) * (0.55 + random() * 0.5);
+    branch.rotation.x = (random() - 0.5) * 0.5;
     branch.rotation.y = random() * Math.PI;
+    branch.castShadow = true;
   }
 
   scene.add(group);
@@ -391,6 +413,34 @@ function createForest() {
     }
     scene.add(group);
   }
+
+  // Batched leaf litter and moss flecks add ground variation with only one draw call.
+  const litterPositions = [];
+  const litterColors = [];
+  const litterPalette = [new THREE.Color('#6b6542'), new THREE.Color('#4b5734'), new THREE.Color('#76694a'), new THREE.Color('#35452c')];
+  for (let i = 0; i < 620; i++) {
+    const x = (random() - 0.5) * 220;
+    const z = (random() - 0.5) * 220;
+    if (Math.hypot(x, z) < 8) continue;
+    const y = terrainHeight(x, z) + 0.035;
+    const length = 0.12 + random() * 0.34;
+    const width = 0.035 + random() * 0.09;
+    const angle = random() * Math.PI;
+    const dx = Math.cos(angle) * length;
+    const dz = Math.sin(angle) * length;
+    const wx = -Math.sin(angle) * width;
+    const wz = Math.cos(angle) * width;
+    litterPositions.push(x - dx, y, z - dz, x + dx, y, z + dz, x + wx, y + 0.01, z + wz);
+    const color = litterPalette[Math.floor(random() * litterPalette.length)];
+    for (let k = 0; k < 3; k++) litterColors.push(color.r, color.g, color.b);
+  }
+  const litterGeometry = new THREE.BufferGeometry();
+  litterGeometry.setAttribute('position', new THREE.Float32BufferAttribute(litterPositions, 3));
+  litterGeometry.setAttribute('color', new THREE.Float32BufferAttribute(litterColors, 3));
+  litterGeometry.computeVertexNormals();
+  const litter = new THREE.Mesh(litterGeometry, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 1 }));
+  litter.frustumCulled = true;
+  scene.add(litter);
 }
 
 function createPlayer() {
