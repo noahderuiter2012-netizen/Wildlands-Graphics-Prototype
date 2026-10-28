@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 import './style.css';
 
 const app = document.querySelector('#app');
@@ -59,7 +60,7 @@ const intro = document.querySelector('#intro');
 const startButton = document.querySelector('#startButton');
 const errorBox = document.querySelector('#error');
 
-let scene, camera, renderer, clock;
+let scene, camera, cameraRig, renderer, clock;
 let player, playerGroup, ground;
 let running = false;
 let gameStarted = false;
@@ -633,6 +634,10 @@ function setupScene() {
     0.1,
     500
   );
+  // A movable rig lets desktop orbit and headset pose share the same world-space player.
+  cameraRig = new THREE.Group();
+  cameraRig.add(camera);
+  scene.add(cameraRig);
 
   renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -641,6 +646,10 @@ function setupScene() {
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.15));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  const vrButton = VRButton.createButton(renderer);
+  vrButton.id = 'enterVRButton';
+  document.body.appendChild(vrButton);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -727,7 +736,7 @@ rendererSafeSetup();
 function rendererSafeSetup() {
   try {
     setupScene();
-    animate();
+    renderer.setAnimationLoop(animate);
     setupControls();
   } catch (error) {
     showError(error);
@@ -882,7 +891,14 @@ function movePlayer(delta) {
   const speed = sprinting ? 10.5 : 5.6;
   const direction = new THREE.Vector3();
   const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+  if (renderer?.xr?.isPresenting) {
+    // In VR, locomotion follows the direction the player is looking, projected onto the ground.
+    renderer.xr.getCamera(camera).getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() > 0.001) forward.normalize();
+    else forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+  }
+  const right = new THREE.Vector3(-forward.z, 0, forward.x);
 
   direction.addScaledVector(forward, forwardInput);
   direction.addScaledVector(right, sideInput);
@@ -931,10 +947,16 @@ function movePlayer(delta) {
 }
 
 function updateCamera(delta) {
-  if (!player) return;
+  if (!player || !cameraRig) return;
 
-  // Keep the camera target anchored to the ground while the player jumps,
-  // otherwise the camera follows the vertical motion and hides the jump.
+  if (renderer?.xr?.isPresenting) {
+    // Headset tracking owns the camera's local rotation and height while the rig follows the player.
+    cameraRig.position.set(player.position.x, terrainHeight(player.position.x, player.position.z) + jumpHeight, player.position.z);
+    camera.position.set(0, 1.65, 0);
+    return;
+  }
+
+  // Desktop mode remains a third-person camera, anchored to the player's ground position.
   const target = new THREE.Vector3(
     player.position.x,
     terrainHeight(player.position.x, player.position.z) + 1.5,
@@ -947,13 +969,12 @@ function updateCamera(delta) {
     Math.cos(yaw) * horizontal
   );
 
-  const desired = target.clone().add(offset);
-  camera.position.lerp(desired, 1 - Math.exp(-5 * delta));
+  cameraRig.position.lerp(target, 1 - Math.exp(-5 * delta));
+  camera.position.copy(offset);
   camera.lookAt(target);
 }
 
 function animate() {
-  requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.04);
   worldTime += delta;
 
