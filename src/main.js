@@ -158,71 +158,15 @@ function terrainHeight(x, z) {
 }
 
 function createTerrain() {
-  const geometry = new THREE.PlaneGeometry(
-    WORLD_SIZE,
-    WORLD_SIZE,
-    110,
-    110
-  );
+  // Simple walkable ground plane only; all visible woodland dressing comes from imported 3D assets.
+  const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 1, 1);
   geometry.rotateX(-Math.PI / 2);
-
-  const positions = geometry.attributes.position;
-  for (let i = 0; i < positions.count; i++) {
-    const x = positions.getX(i);
-    const z = positions.getZ(i);
-    positions.setY(i, terrainHeight(x, z));
-  }
-
-  geometry.computeVertexNormals();
-
-  const colors = [];
-  const green = new THREE.Color('#40583a');
-  const darkGreen = new THREE.Color('#18271d');
-  const mossGreen = new THREE.Color('#596747');
-  const forestSoil = new THREE.Color('#302e24');
-
-  for (let i = 0; i < positions.count; i++) {
-    const x = positions.getX(i);
-    const z = positions.getZ(i);
-    const y = positions.getY(i);
-    const variation = Math.sin(x * 0.12 + z * 0.07) * Math.cos(z * 0.11 - x * 0.04);
-    const mossAmount = THREE.MathUtils.clamp((variation - 0.05) * 0.8, 0, 0.65);
-    const soilAmount = THREE.MathUtils.clamp((-variation - 0.35) * 0.4, 0, 0.3);
-    const heightShade = THREE.MathUtils.clamp((y + 3) / 10, 0, 0.45);
-    const c = darkGreen.clone().lerp(green, 0.45 + heightShade).lerp(mossGreen, mossAmount).lerp(forestSoil, soilAmount);
-    colors.push(c.r, c.g, c.b);
-  }
-
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-  ground = new THREE.Mesh(
-    geometry,
-    new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 1
-    })
-  );
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    color: '#3b4532', roughness: 1, metalness: 0
+  });
+  ground = new THREE.Mesh(geometry, groundMaterial);
   ground.receiveShadow = true;
   scene.add(ground);
-
-  // Distant, low hills make the horizon feel less empty.
-  const hillMaterial = material('#263c2b');
-  for (let i = 0; i < 34; i++) {
-    const angle = (i / 34) * Math.PI * 2;
-    const radius = 104 + random() * 25;
-    const sx = 8 + random() * 16;
-    const sy = 5 + random() * 12;
-    const sz = 10 + random() * 18;
-    const hill = addMesh(
-      new THREE.SphereGeometry(1, 10, 8),
-      hillMaterial,
-      Math.cos(angle) * radius,
-      sy * 0.35 - 1,
-      Math.sin(angle) * radius
-    );
-    hill.scale.set(sx, sy, sz);
-    hill.receiveShadow = true;
-  }
 }
 
 const riverCurve = new THREE.CatmullRomCurve3([
@@ -238,70 +182,34 @@ const riverCurve = new THREE.CatmullRomCurve3([
 ]);
 
 function createRiver() {
+  // A narrow, readable waterway; the banks are dressed with imported woodland models.
   const points = riverCurve.getPoints(140);
   const vertices = [];
   const indices = [];
-
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     const before = points[Math.max(0, i - 1)];
     const after = points[Math.min(points.length - 1, i + 1)];
     const direction = new THREE.Vector3().subVectors(after, before).normalize();
     const side = new THREE.Vector3(-direction.z, 0, direction.x);
-    const width = 3.2 + Math.sin(i * 0.23) * 0.55;
-    const y = terrainHeight(p.x, p.z) + 0.16;
-
-    vertices.push(
-      p.x + side.x * width, y, p.z + side.z * width,
-      p.x - side.x * width, y, p.z - side.z * width
-    );
-
+    const width = 2.7 + Math.sin(i * 0.13) * 0.35;
+    vertices.push(p.x + side.x * width, 0.03, p.z + side.z * width,
+                  p.x - side.x * width, 0.03, p.z - side.z * width);
     if (i < points.length - 1) {
       const a = i * 2;
       indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
   }
-
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-
-  const water = new THREE.Mesh(
-    geometry,
-    new THREE.MeshStandardMaterial({
-      color: '#326c78',
-      roughness: 0.22,
-      metalness: 0.22,
-      transparent: true,
-      opacity: 0.88,
-      side: THREE.DoubleSide
-    })
-  );
+  const water = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    color: '#315c5a', roughness: 0.18, metalness: 0.12, transparent: true,
+    opacity: 0.9, side: THREE.DoubleSide
+  }));
   water.receiveShadow = true;
   scene.add(water);
-
-  // Small pale stones along parts of the bank.
-  const stoneMat = material('#7b8070');
-  for (let i = 0; i < 95; i++) {
-    const t = 0.04 + random() * 0.92;
-    const p = riverCurve.getPoint(t);
-    const tangent = riverCurve.getTangent(t);
-    const side = new THREE.Vector3(-tangent.z, 0, tangent.x);
-    const offset = (random() < 0.5 ? -1 : 1) * (4.3 + random() * 2.3);
-    const x = p.x + side.x * offset;
-    const z = p.z + side.z * offset;
-
-    const rock = addMesh(
-      new THREE.DodecahedronGeometry(0.45 + random() * 0.7, 0),
-      stoneMat,
-      x,
-      terrainHeight(x, z) + 0.25,
-      z
-    );
-    rock.scale.y = 0.5 + random() * 0.6;
-    rock.rotation.set(random(), random() * 3, random());
-  }
 }
 
 function createTree(x, z, scale = 1) {
@@ -485,35 +393,74 @@ function createGrass() {
 }
 
 function createForest() {
-  // Use a complete, pre-made CC0 woodland asset pack instead of generating trees from primitives.
-  // The scene contains multiple tree species, undergrowth, deadwood, rocks and forest-floor detail.
+  // Rebuild the forest from separate CC0 GLB models, with deliberate gaps and a clear river corridor.
+  // No generated cylinders, spheres, or primitive foliage are used as trees or plants.
   const loader = new GLTFLoader();
-  const forestStatus = document.querySelector('#message');
-  forestStatus.textContent = 'Loading forest assets…';
-  loader.load(
-    'https://cdn.3dassets.dev/assets/28437/v1/model.glb',
-    gltf => {
-      const woodland = gltf.scene;
-      woodland.name = 'PrebuiltTemperateWoodland';
-      // Keep the imported grove readable instead of filling the whole view with overlapping foliage.
-      woodland.scale.setScalar(2.35);
-      woodland.position.set(0, -0.1, -24);
-      woodland.traverse(object => {
-        if (!object.isMesh) return;
-        object.castShadow = true;
-        object.receiveShadow = true;
-        // Keep source materials and colour variation; do not flatten the pack into one tint.
+  const status = document.querySelector('#message');
+  status.textContent = 'Loading realistic woodland models…';
+  const assets = {
+    tree: 'https://cdn.3dassets.dev/assets/36137/v1/model.glb',
+    log: 'https://cdn.3dassets.dev/assets/36143/v1/model.glb',
+    floor: 'https://cdn.3dassets.dev/assets/36160/v1/model.glb'
+  };
+  const cache = new Map();
+  const loadModel = url => new Promise((resolve, reject) => {
+    if (cache.has(url)) { resolve(cache.get(url)); return; }
+    loader.load(url, gltf => {
+      cache.set(url, gltf.scene);
+      resolve(gltf.scene);
+    }, undefined, reject);
+  });
+  const addInstance = async (url, x, z, scale, rotation = 0, name = 'ForestAsset') => {
+    try {
+      const template = await loadModel(url);
+      const model = template.clone(true);
+      model.name = name;
+      model.position.set(x, 0, z);
+      model.rotation.y = rotation;
+      model.scale.setScalar(scale);
+      model.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.receiveShadow = true;
       });
-      scene.add(woodland);
-      forestStatus.textContent = 'Forest assets loaded — follow the open ground into the woodland.';
-    },
-    undefined,
-    error => {
-      console.error('Could not load the pre-made woodland asset pack:', error);
-      forestStatus.textContent = 'Forest asset loading failed. Check your connection and reload.';
+      scene.add(model);
+      // Coarse trunk collision for the player.
+      if (name.includes('Tree')) obstacles.push({ x, z, radius: 1.4 * scale });
+    } catch (error) {
+      console.error('Forest model failed to load:', url, error);
+      status.textContent = 'Some woodland models failed to load. Reload with a stable connection.';
     }
-  );
+  };
+  // Main trees form loose groups rather than a continuous wall. The centre and river stay open.
+  const treeSpots = [
+    [-32,-38,1.0],[-22,-47,0.82],[-43,-54,1.08],[-10,-44,0.88],
+    [18,-52,1.02],[31,-43,0.86],[44,-56,1.06],[53,-38,0.9],
+    [-48,-15,0.94],[-38,2,1.05],[-51,20,0.82],[-35,36,1.0],
+    [43,6,0.95],[51,24,1.06],[37,39,0.84],[53,48,1.0],
+    [-30,58,0.82],[-12,63,1.0],[12,58,0.9],[28,65,1.05],
+    [-68,-38,1.05],[-73,-10,0.9],[-69,21,1.0],[70,-31,0.9],[73,7,1.05],[69,37,0.86],
+    [-90,-58,1.0],[-96,-24,0.9],[-91,15,1.05],[-86,52,0.95],
+    [92,-53,1.0],[97,-14,0.9],[91,25,1.06],[88,55,0.92]
+  ];
+  for (let i = 0; i < treeSpots.length; i++) {
+    const [x,z,s] = treeSpots[i];
+    // Leave a broad open start area and a clear strip around the stream.
+    if (Math.hypot(x,z) < 17) continue;
+    const nearestRiver = riverCurve.getPoints(32).reduce((best,p) => Math.min(best, Math.hypot(x-p.x,z-p.z)), Infinity);
+    if (nearestRiver < 9) continue;
+    addInstance(assets.tree, x, z, s, (i * 1.71) % (Math.PI * 2), 'ImportedTree');
+  }
+  const logs = [[-26,-30,1.0],[25,-31,0.85],[-57,31,0.9],[59,35,1.0],[-78,2,0.8],[81,-5,0.9]];
+  logs.forEach(([x,z,s],i) => addInstance(assets.log,x,z,s,(i*1.1)%Math.PI,'ImportedFallenLog'));
+  // A separate, light scattering of the complete scene asset adds background depth only.
+  // Kept small and behind the foreground tree line to avoid the former clumped-up starting view.
+  addInstance(assets.floor, -8, -92, 0.42, 0, 'DistantWoodlandBackdrop');
+  setTimeout(() => {
+    if (status.textContent.includes('Loading')) status.textContent = 'Woodland models placed — explore the open river corridor.';
+  }, 9000);
 }
+
 function createPlayer() {
   playerGroup = new THREE.Group();
 
