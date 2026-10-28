@@ -93,6 +93,43 @@ function material(color, roughness = 1, extra = {}) {
   });
 }
 
+let barkTexture;
+function getBarkTexture() {
+  if (barkTexture) return barkTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 128, 0);
+  gradient.addColorStop(0, '#39291f');
+  gradient.addColorStop(0.18, '#71503a');
+  gradient.addColorStop(0.34, '#4b3527');
+  gradient.addColorStop(0.52, '#806044');
+  gradient.addColorStop(0.7, '#4a3427');
+  gradient.addColorStop(1, '#30251e');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 256);
+  // Fine vertical ridges and broken bark fissures, generated once and reused by every tree.
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * 128;
+    const y = Math.random() * 256;
+    const length = 5 + Math.random() * 60;
+    ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(20,13,9,0.30)' : 'rgba(190,145,96,0.18)';
+    ctx.lineWidth = 0.4 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 4, Math.min(256, y + length));
+    ctx.stroke();
+  }
+  barkTexture = new THREE.CanvasTexture(canvas);
+  barkTexture.colorSpace = THREE.SRGBColorSpace;
+  barkTexture.wrapS = THREE.RepeatWrapping;
+  barkTexture.wrapT = THREE.RepeatWrapping;
+  barkTexture.repeat.set(1, 1.6);
+  barkTexture.anisotropy = 2;
+  return barkTexture;
+}
+
 function addMesh(geometry, mat, x, y, z, parent = scene) {
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.position.set(x, y, z);
@@ -272,8 +309,8 @@ function createTree(x, z, scale = 1) {
   group.position.set(x, y, z);
   group.scale.setScalar(scale);
 
-  const trunkMat = material(random() > 0.5 ? '#4d3827' : '#60452d');
-  const barkLight = material('#735238');
+  const trunkMat = material('#d1b092', 1, { map: getBarkTexture() });
+  const barkLight = material('#b18b68', 1, { map: getBarkTexture() });
   const leaves = [
     material('#183a28'),
     material('#21462d'),
@@ -284,7 +321,7 @@ function createTree(x, z, scale = 1) {
 
   const trunkHeight = 4.5 + random() * 3.5;
   const trunk = addMesh(
-    new THREE.CylinderGeometry(0.24, 0.68, trunkHeight, 8, 2),
+    new THREE.CylinderGeometry(0.22, 0.72, trunkHeight, 9, 5),
     trunkMat,
     0,
     trunkHeight / 2,
@@ -296,13 +333,13 @@ function createTree(x, z, scale = 1) {
   trunk.receiveShadow = true;
 
   // Uneven root flares make the trunks feel anchored in the forest floor.
-  for (let rootIndex = 0; rootIndex < 2; rootIndex++) {
+  for (let rootIndex = 0; rootIndex < 4; rootIndex++) {
     const root = addMesh(
-      new THREE.CylinderGeometry(0.035, 0.24 + random() * 0.12, 1.15 + random() * 0.45, 5),
+      new THREE.CylinderGeometry(0.025, 0.26 + random() * 0.16, 1.25 + random() * 0.55, 6),
       rootIndex === 0 ? trunkMat : barkLight,
-      (random() - 0.5) * 0.48,
+      Math.cos(rootIndex * Math.PI / 2 + random() * 0.5) * (0.25 + random() * 0.18),
       0.28,
-      (random() - 0.5) * 0.48,
+      Math.sin(rootIndex * Math.PI / 2 + random() * 0.5) * (0.25 + random() * 0.18),
       group
     );
     root.rotation.z = (random() < 0.5 ? -1 : 1) * (0.65 + random() * 0.3);
@@ -311,22 +348,22 @@ function createTree(x, z, scale = 1) {
   }
 
   const crownY = trunkHeight * 0.48;
-  const layerCount = 5;
+  const layerCount = 6;
 
   for (let layer = 0; layer < layerCount; layer++) {
     const progress = layer / layerCount;
-    const radius = (3.0 * (1 - progress) + 0.3) * (0.72 + random() * 0.48);
+    const radius = (3.25 * (1 - progress) + 0.42) * (0.72 + random() * 0.48);
     const height = 2.5 + random() * 1.45;
     const crown = addMesh(
-      new THREE.IcosahedronGeometry(radius, 1),
+      new THREE.SphereGeometry(radius, 8, 6),
       leaves[Math.floor(random() * leaves.length)],
       (random() - 0.5) * 1.35,
       crownY + layer * (0.82 + random() * 0.22),
       (random() - 0.5) * 1.35,
       group
     );
-    // Faceted, asymmetrical foliage clumps create a broader, less artificial canopy.
-    crown.scale.set(0.82 + random() * 0.42, height / (radius * 2), 0.78 + random() * 0.46);
+    // Rounded, overlapping leaf masses form a softer broadleaf canopy instead of stacked cones.
+    crown.scale.set(0.82 + random() * 0.55, height / (radius * 1.8), 0.78 + random() * 0.55);
     crown.rotation.y = random() * Math.PI;
     crown.rotation.z = (random() - 0.5) * 0.24;
     crown.rotation.x = (random() - 0.5) * 0.2;
