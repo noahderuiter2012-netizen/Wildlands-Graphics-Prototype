@@ -352,6 +352,56 @@ function createTree(x, z, scale = 1) {
   obstacles.push({ x, z, radius: 0.7 * scale });
 }
 
+function createGrass() {
+  // Instanced grass gives the ground a layered, wind-swept surface with only a few draw calls.
+  const bladeGeometry = new THREE.ConeGeometry(0.075, 0.72, 4, 1);
+  bladeGeometry.translate(0, 0.36, 0);
+  const bladeGeometrySmall = new THREE.ConeGeometry(0.052, 0.48, 4, 1);
+  bladeGeometrySmall.translate(0, 0.24, 0);
+  const bladeMaterial = new THREE.MeshStandardMaterial({
+    color: '#9aaa62', roughness: 1, vertexColors: true, side: THREE.DoubleSide
+  });
+  const bladeCount = 2200;
+  const tallGrass = new THREE.InstancedMesh(bladeGeometry, bladeMaterial, bladeCount);
+  const shortGrass = new THREE.InstancedMesh(bladeGeometrySmall, bladeMaterial, bladeCount);
+  const dummy = new THREE.Object3D();
+  const palette = ['#71874b', '#8a9b58', '#536e3d', '#a4a56a', '#647a42'];
+  let placed = 0;
+  let attempts = 0;
+  while (placed < bladeCount && attempts < bladeCount * 3) {
+    attempts++;
+    const x = (random() - 0.5) * 224;
+    const z = (random() - 0.5) * 224;
+    if (Math.hypot(x, z) < 12) continue;
+    const riverPoint = riverCurve.getPoint(THREE.MathUtils.clamp((x + 125) / 250, 0, 1));
+    if (Math.hypot(x - riverPoint.x, z - riverPoint.z) < 5.5) continue;
+    // Keep grass away from tree trunks and boulders so the player can still read the terrain.
+    if (obstacles.some(o => Math.hypot(x - o.x, z - o.z) < o.radius + 0.45)) continue;
+    const y = terrainHeight(x, z) + 0.025;
+    const scale = 0.55 + random() * 1.0;
+    dummy.position.set(x, y, z);
+    dummy.rotation.set((random() - 0.5) * 0.16, random() * Math.PI, (random() - 0.5) * 0.28);
+    dummy.scale.set(scale, scale, scale);
+    dummy.updateMatrix();
+    tallGrass.setMatrixAt(placed, dummy.matrix);
+    tallGrass.setColorAt(placed, new THREE.Color(palette[Math.floor(random() * palette.length)]));
+    dummy.position.set(x + (random() - 0.5) * 0.22, y, z + (random() - 0.5) * 0.22);
+    dummy.rotation.set((random() - 0.5) * 0.18, random() * Math.PI, (random() - 0.5) * 0.3);
+    dummy.scale.setScalar(scale * (0.65 + random() * 0.35));
+    dummy.updateMatrix();
+    shortGrass.setMatrixAt(placed, dummy.matrix);
+    shortGrass.setColorAt(placed, new THREE.Color(palette[Math.floor(random() * palette.length)]));
+    placed++;
+  }
+  tallGrass.count = placed;
+  shortGrass.count = placed;
+  tallGrass.instanceMatrix.needsUpdate = true;
+  shortGrass.instanceMatrix.needsUpdate = true;
+  tallGrass.receiveShadow = true;
+  shortGrass.receiveShadow = true;
+  scene.add(tallGrass, shortGrass);
+}
+
 function createForest() {
   // Tree placement leaves an open starting clearing.
   for (let i = 0; i < 520; i++) {
@@ -445,6 +495,8 @@ function createForest() {
   const litter = new THREE.Mesh(litterGeometry, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 1 }));
   litter.frustumCulled = true;
   scene.add(litter);
+
+  createGrass();
 }
 
 function createPlayer() {
@@ -491,8 +543,8 @@ function createPlayer() {
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#9bb3a2');
-  scene.fog = new THREE.FogExp2('#9bb3a2', 0.0072);
+  scene.background = new THREE.Color('#a8b9a7');
+  scene.fog = new THREE.FogExp2('#a8b9a7', 0.0078);
 
   camera = new THREE.PerspectiveCamera(
     65,
@@ -512,17 +564,22 @@ function setupScene() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.08;
   game.prepend(renderer.domElement);
 
   clock = new THREE.Clock();
 
-  scene.add(new THREE.HemisphereLight('#d7e8cf', '#25362b', 2.0));
+  scene.add(new THREE.HemisphereLight('#e2edda', '#1c2b20', 1.75));
 
-  const sun = new THREE.DirectionalLight('#fff0cc', 2.4);
+  // A soft green fill keeps shaded trunks and foliage readable under the canopy.
+  const forestFill = new THREE.DirectionalLight('#b7d3a0', 0.55);
+  forestFill.position.set(28, 24, 18);
+  scene.add(forestFill);
+
+  const sun = new THREE.DirectionalLight('#ffe6b5', 2.8);
   sun.position.set(-35, 65, -25);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(1536, 1536);
   sun.shadow.camera.left = -45;
   sun.shadow.camera.right = 45;
   sun.shadow.camera.top = 45;
@@ -817,7 +874,7 @@ function animate() {
   }
 
   // Slow, subtle variation in the forest atmosphere.
-  const fogPulse = 0.0085 + Math.sin(worldTime * 0.08) * 0.00025;
+  const fogPulse = 0.0082 + Math.sin(worldTime * 0.08) * 0.00022;
   scene.fog.density = fogPulse;
 
   renderer.render(scene, camera);
