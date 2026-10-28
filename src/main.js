@@ -309,88 +309,130 @@ function createTree(x, z, scale = 1) {
   group.position.set(x, y, z);
   group.scale.setScalar(scale);
 
-  const trunkMat = material('#d1b092', 1, { map: getBarkTexture() });
-  const barkLight = material('#b18b68', 1, { map: getBarkTexture() });
-  const leaves = [
-    material('#183a28'),
-    material('#21462d'),
-    material('#2b5032'),
-    material('#34583a'),
-    material('#3b6040')
+  const bark = material('#624632', 1, { map: getBarkTexture() });
+  const barkLit = material('#806044', 1, { map: getBarkTexture() });
+  const moss = material('#344b2c', 1);
+  const leafMats = [
+    material('#172f20', 1), material('#203b26', 1),
+    material('#29462b', 1), material('#354f30', 1),
+    material('#405b35', 1), material('#4b6139', 1)
   ];
+  const trunkHeight = 6.2 + random() * 4.2;
+  const trunkLeanX = (random() - 0.5) * 0.9;
+  const trunkLeanZ = (random() - 0.5) * 0.9;
 
-  const trunkHeight = 4.5 + random() * 3.5;
-  const trunk = addMesh(
-    new THREE.CylinderGeometry(0.22, 0.72, trunkHeight, 9, 5),
-    trunkMat,
-    0,
-    trunkHeight / 2,
-    0,
-    group
-  );
-  trunk.rotation.z = (random() - 0.5) * 0.1;
-  trunk.castShadow = true;
-  trunk.receiveShadow = true;
-
-  // Uneven root flares make the trunks feel anchored in the forest floor.
-  for (let rootIndex = 0; rootIndex < 4; rootIndex++) {
-    const root = addMesh(
-      new THREE.CylinderGeometry(0.025, 0.26 + random() * 0.16, 1.25 + random() * 0.55, 6),
-      rootIndex === 0 ? trunkMat : barkLight,
-      Math.cos(rootIndex * Math.PI / 2 + random() * 0.5) * (0.25 + random() * 0.18),
-      0.28,
-      Math.sin(rootIndex * Math.PI / 2 + random() * 0.5) * (0.25 + random() * 0.18),
+  // A slightly leaning, irregular trunk built from tapered sections, not one perfect tube.
+  const trunkSegments = 4;
+  for (let s = 0; s < trunkSegments; s++) {
+    const t0 = s / trunkSegments;
+    const t1 = (s + 1) / trunkSegments;
+    const h = trunkHeight / trunkSegments + 0.12;
+    const bottomRadius = 0.62 * (1 - t0 * 0.76);
+    const topRadius = 0.62 * (1 - t1 * 0.76);
+    const segment = addMesh(
+      new THREE.CylinderGeometry(Math.max(0.13, topRadius), bottomRadius, h, 7, 2),
+      s % 2 ? barkLit : bark,
+      trunkLeanX * (t0 + t1) * 0.5,
+      trunkHeight * (t0 + t1) * 0.5,
+      trunkLeanZ * (t0 + t1) * 0.5,
       group
     );
-    root.rotation.z = (random() < 0.5 ? -1 : 1) * (0.65 + random() * 0.3);
-    root.rotation.y = random() * Math.PI;
+    segment.rotation.z = trunkLeanX / trunkHeight;
+    segment.rotation.x = -trunkLeanZ / trunkHeight;
+    segment.rotation.y = random() * 0.2;
+    segment.castShadow = true;
+    segment.receiveShadow = true;
+  }
+
+  // Exposed roots spread over the forest floor and merge into the trunk base.
+  for (let i = 0; i < 5; i++) {
+    const angle = i * Math.PI * 2 / 5 + random() * 0.45;
+    const length = 1.0 + random() * 1.1;
+    const root = addMesh(
+      new THREE.CylinderGeometry(0.025, 0.24 + random() * 0.12, length, 5),
+      i % 2 ? bark : barkLit,
+      Math.cos(angle) * length * 0.35,
+      0.16,
+      Math.sin(angle) * length * 0.35,
+      group
+    );
+    root.rotation.z = Math.cos(angle) * 1.12;
+    root.rotation.x = Math.sin(angle) * 1.12;
+    root.rotation.y = angle;
     root.castShadow = true;
   }
 
-  const crownY = trunkHeight * 0.48;
-  const layerCount = 6;
-
-  for (let layer = 0; layer < layerCount; layer++) {
-    const progress = layer / layerCount;
-    const radius = (3.25 * (1 - progress) + 0.42) * (0.72 + random() * 0.48);
-    const height = 2.5 + random() * 1.45;
-    const crown = addMesh(
-      new THREE.SphereGeometry(radius, 8, 6),
-      leaves[Math.floor(random() * leaves.length)],
-      (random() - 0.5) * 1.35,
-      crownY + layer * (0.82 + random() * 0.22),
-      (random() - 0.5) * 1.35,
+  // Main limbs branch outward and upward from the trunk, breaking the lollipop silhouette.
+  const limbData = [];
+  for (let i = 0; i < 5; i++) {
+    const angle = i * Math.PI * 2 / 5 + random() * 0.6;
+    const startY = trunkHeight * (0.48 + random() * 0.25);
+    const length = 1.9 + random() * 1.8;
+    const rise = 0.8 + random() * 1.4;
+    const start = new THREE.Vector3(trunkLeanX * startY / trunkHeight, startY, trunkLeanZ * startY / trunkHeight);
+    const endPoint = new THREE.Vector3(start.x + Math.cos(angle) * length, startY + rise, start.z + Math.sin(angle) * length);
+    const delta = new THREE.Vector3().subVectors(endPoint, start);
+    const limb = addMesh(
+      new THREE.CylinderGeometry(0.055, 0.19, delta.length(), 5),
+      bark,
+      (start.x + endPoint.x) / 2,
+      (start.y + endPoint.y) / 2,
+      (start.z + endPoint.z) / 2,
       group
     );
-    // Rounded, overlapping leaf masses form a softer broadleaf canopy instead of stacked cones.
-    crown.scale.set(0.82 + random() * 0.55, height / (radius * 1.8), 0.78 + random() * 0.55);
-    crown.rotation.y = random() * Math.PI;
-    crown.rotation.z = (random() - 0.5) * 0.24;
-    crown.rotation.x = (random() - 0.5) * 0.2;
-    crown.castShadow = true;
-    crown.receiveShadow = true;
+    limb.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize());
+    limb.castShadow = true;
+    limbData.push({ x: endPoint.x, y: endPoint.y, z: endPoint.z, angle });
   }
 
-  // Branches point in varied directions instead of forming a repeated pair.
-  for (let i = 0; i < 3; i++) {
-    const branch = addMesh(
-      new THREE.CylinderGeometry(0.055, 0.19, 1.8 + random() * 0.8, 5),
-      trunkMat,
-      (random() - 0.5) * 1.1,
-      trunkHeight * (0.5 + i * 0.11),
-      (random() - 0.5) * 1.1,
+  // Irregular low-poly leaf clumps make a broken, branching canopy instead of six smooth balls.
+  const leafGeometry = new THREE.IcosahedronGeometry(1, 1);
+  const canopyY = trunkHeight * 0.66;
+  for (let i = 0; i < 18; i++) {
+    const angle = random() * Math.PI * 2;
+    const spread = i < 5 ? 0.8 + random() * 1.5 : 1.5 + random() * 3.0;
+    const radius = 1.0 + random() * 1.25;
+    const cluster = addMesh(
+      leafGeometry,
+      leafMats[Math.floor(random() * leafMats.length)],
+      Math.cos(angle) * spread + trunkLeanX * 0.4,
+      canopyY + (random() - 0.35) * 3.5,
+      Math.sin(angle) * spread + trunkLeanZ * 0.4,
       group
     );
-    branch.rotation.z = (random() < 0.5 ? -1 : 1) * (0.55 + random() * 0.5);
-    branch.rotation.x = (random() - 0.5) * 0.5;
-    branch.rotation.y = random() * Math.PI;
-    branch.castShadow = true;
+    cluster.scale.set(radius * (0.85 + random() * 0.55), radius * (0.55 + random() * 0.65), radius * (0.8 + random() * 0.65));
+    cluster.rotation.set(random() * 0.8, random() * Math.PI, random() * 0.8);
+    cluster.castShadow = true;
+    cluster.receiveShadow = true;
+  }
+  // Smaller foliage clusters follow the branch tips, so the canopy silhouette stays uneven.
+  for (const limb of limbData) {
+    for (let j = 0; j < 2; j++) {
+      const puff = addMesh(
+        leafGeometry,
+        leafMats[Math.floor(random() * leafMats.length)],
+        limb.x + (random() - 0.5) * 1.6,
+        limb.y + random() * 1.3,
+        limb.z + (random() - 0.5) * 1.6,
+        group
+      );
+      const r = 0.8 + random() * 0.9;
+      puff.scale.set(r * 1.2, r * 0.8, r);
+      puff.rotation.set(random(), random() * Math.PI, random());
+      puff.castShadow = true;
+    }
+  }
+
+  // Moss patches break up the lower bark with muted, non-glossy colour.
+  for (let i = 0; i < 3; i++) {
+    const patch = addMesh(new THREE.IcosahedronGeometry(0.18 + random() * 0.12, 0), moss,
+      (random() - 0.5) * 0.7, 0.8 + random() * 1.7, (random() - 0.5) * 0.7, group);
+    patch.scale.set(0.7, 1.4, 0.35);
   }
 
   scene.add(group);
-  obstacles.push({ x, z, radius: 0.7 * scale });
+  obstacles.push({ x, z, radius: 0.85 * scale });
 }
-
 function createGrass() {
   // Instanced grass gives the ground a layered, wind-swept surface with only a few draw calls.
   const bladeGeometry = new THREE.ConeGeometry(0.075, 0.72, 4, 1);
