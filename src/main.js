@@ -149,30 +149,52 @@ function randomGenerator(seed = 92381) {
 const random = randomGenerator();
 
 function terrainHeight(x, z) {
-  // The rebuilt map uses a level base while imported ground modules are being assembled.
-  return 0;
+  // Broad, overlapping height waves make the ground gently roll without noisy, game-like spikes.
+  return (Math.sin(x * 0.035 + Math.cos(z * 0.027)) * 1.25 +
+    Math.cos(z * 0.044 - x * 0.018) * 0.8 +
+    Math.sin((x + z) * 0.075) * 0.22) * 0.72;
 }
 
 function createTerrain() {
-  // Fine-grained forest floor with subtle natural variation, kept nearly level for navigation.
+  // Gently rolling terrain with a reusable leaf-litter / damp soil texture.
   const segments = 180;
   const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, segments, segments);
   geometry.rotateX(-Math.PI / 2);
   const pos = geometry.attributes.position;
   const colors = [];
-  const colorA = new THREE.Color('#273326');
-  const colorB = new THREE.Color('#46503a');
+  const colorA = new THREE.Color('#777c61');
+  const colorB = new THREE.Color('#a0a080');
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
-    const n = Math.sin(x * 0.17) * Math.cos(z * 0.13) * 0.035 + Math.sin((x + z) * 0.47) * 0.012;
-    pos.setY(i, n);
-    const variation = THREE.MathUtils.clamp(0.45 + Math.sin(x * 0.06 + z * 0.035) * 0.2 + Math.sin(z * 0.18) * 0.08, 0, 1);
+    pos.setY(i, terrainHeight(x, z));
+    const variation = THREE.MathUtils.clamp(0.38 + Math.sin(x * 0.045 + z * 0.031) * 0.18 + Math.sin(z * 0.13) * 0.07, 0, 1);
     const c = colorA.clone().lerp(colorB, variation);
     colors.push(c.r, c.g, c.b);
   }
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 });
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#77735a'; ctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 26000; i++) {
+    const x = random() * 512, y = random() * 512;
+    const kind = random();
+    if (kind < 0.38) ctx.fillStyle = `rgba(38,48,31,${0.06 + random()*0.2})`;
+    else if (kind < 0.70) ctx.fillStyle = `rgba(132,104,66,${0.06 + random()*0.22})`;
+    else ctx.fillStyle = `rgba(177,164,119,${0.04 + random()*0.17})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 0.5 + random()*2.6, 0.25 + random()*1.1, random()*Math.PI, 0, Math.PI*2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 180; i++) {
+    ctx.strokeStyle = `rgba(35,31,23,${0.06 + random()*0.12})`; ctx.lineWidth = 0.4 + random()*1.1;
+    ctx.beginPath(); ctx.moveTo(random()*512, random()*512); ctx.lineTo(random()*512, random()*512); ctx.stroke();
+  }
+  const floorTexture = new THREE.CanvasTexture(canvas);
+  floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+  floorTexture.repeat.set(9, 9); floorTexture.colorSpace = THREE.SRGBColorSpace; floorTexture.anisotropy = 4;
+  const groundMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, color: '#c4c9a7', vertexColors: true, roughness: 1, metalness: 0 });
   ground = new THREE.Mesh(geometry, groundMaterial);
   ground.receiveShadow = true;
   scene.add(ground);
@@ -207,7 +229,7 @@ function createDirtPaths() {
     [[0,0],[9,12],[20,19],[32,24],[43,31]]
   ];
   for (const route of routes) {
-    const points = route.map(([x,z]) => new THREE.Vector3(x, 0.075, z));
+    const points = route.map(([x,z]) => new THREE.Vector3(x, terrainHeight(x,z) + 0.09, z));
     const curve = new THREE.CatmullRomCurve3(points);
     const divisions = 100, verts = [], uv = [], idx = [];
     for (let i = 0; i <= divisions; i++) {
@@ -292,8 +314,9 @@ function createRiver() {
     const direction = new THREE.Vector3().subVectors(after, before).normalize();
     const side = new THREE.Vector3(-direction.z, 0, direction.x);
     const width = 2.7 + Math.sin(i * 0.13) * 0.35;
-    vertices.push(p.x + side.x * width, 0.03, p.z + side.z * width,
-                  p.x - side.x * width, 0.03, p.z - side.z * width);
+    const waterY = terrainHeight(p.x, p.z) - 0.12;
+    vertices.push(p.x + side.x * width, waterY, p.z + side.z * width,
+                  p.x - side.x * width, waterY, p.z - side.z * width);
     if (i < points.length - 1) {
       const a = i * 2;
       indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
@@ -370,9 +393,10 @@ function createForest() {
   }
   const logs = [[-26,-30,1.0],[25,-31,0.85],[-57,31,0.9],[59,35,1.0],[-78,2,0.8],[81,-5,0.9]];
   logs.forEach(([x,z,s],i) => addInstance(assets.log,x,z,s,(i*1.1)%Math.PI,'ImportedFallenLog'));
-  setTimeout(() => {
-    if (status.textContent.includes('Loading')) status.textContent = 'Woodland models placed — explore the open river corridor.';
-  }, 9000);
+  Promise.allSettled([...cache.values()]).then(results => {
+    const failed = results.filter(r => r.status === 'rejected').length;
+    status.textContent = failed ? 'Some forest assets failed to load — check connection.' : 'Forest assets loaded. Explore the river corridor.';
+  });
 }
 
 function createPlayer() {
@@ -419,8 +443,8 @@ function createPlayer() {
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#a8b9a7');
-  scene.fog = new THREE.FogExp2('#a8b9a7', 0.0078);
+  scene.background = new THREE.Color('#9eafa0');
+  scene.fog = new THREE.FogExp2('#9eafa0', 0.0062);
 
   camera = new THREE.PerspectiveCamera(
     65,
@@ -445,14 +469,14 @@ function setupScene() {
 
   clock = new THREE.Clock();
 
-  scene.add(new THREE.HemisphereLight('#e2edda', '#1c2b20', 1.75));
+  scene.add(new THREE.HemisphereLight('#dce8d4', '#263126', 1.35));
 
   // A soft green fill keeps shaded trunks and foliage readable under the canopy.
-  const forestFill = new THREE.DirectionalLight('#b7d3a0', 0.55);
+  const forestFill = new THREE.DirectionalLight('#b8cda6', 0.38);
   forestFill.position.set(28, 24, 18);
   scene.add(forestFill);
 
-  const sun = new THREE.DirectionalLight('#ffe6b5', 2.8);
+  const sun = new THREE.DirectionalLight('#ffe4bd', 2.1);
   sun.position.set(-35, 65, -25);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1536, 1536);
