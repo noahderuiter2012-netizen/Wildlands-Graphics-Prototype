@@ -592,7 +592,7 @@ function rendererSafeSetup() {
 }
 
 function setupControls() {
-  window.addEventListener('keydown', event => {
+  document.addEventListener('keydown', event => {
     keys[event.code] = true;
 
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
@@ -607,7 +607,7 @@ function setupControls() {
     }
   });
 
-  window.addEventListener('keyup', event => {
+  document.addEventListener('keyup', event => {
     keys[event.code] = false;
   });
 
@@ -641,7 +641,7 @@ function setupControls() {
   const jumpButton = document.querySelector('#jumpButton');
   const requestJump = event => {
     event?.preventDefault?.();
-    if (gameStarted) jumpRequested = true;
+    if (gameStarted) { jumpRequested = true; message.textContent = 'JUMP BUTTON INPUT DETECTED'; jumpButton.textContent = 'JUMP!'; } else { message.textContent = 'Press START before jumping.'; }
   };
   jumpButton.addEventListener('pointerdown', requestJump);
   jumpButton.addEventListener('click', requestJump);
