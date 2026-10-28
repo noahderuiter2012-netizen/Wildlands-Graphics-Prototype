@@ -486,6 +486,12 @@ function createForest() {
       const x = bounds.x0 + rng() * (bounds.x1 - bounds.x0);
       const z = bounds.z0 + rng() * (bounds.z1 - bounds.z0);
       if (Math.hypot(x, z) < 15 || distanceToRiver(x, z) < 7.5) continue;
+      // Avoid planting tall trees across sharp ridges where trunks can look tilted or float.
+      const slopeX = terrainHeight(x + 1.5, z) - terrainHeight(x - 1.5, z);
+      const slopeZ = terrainHeight(x, z + 1.5) - terrainHeight(x, z - 1.5);
+      const slope = Math.hypot(slopeX, slopeZ) / 3;
+      const maxSlope = kind === 'snow' ? 1.05 : kind === 'volcanic' ? 0.72 : 0.82;
+      if (slope > maxSlope) continue;
       if (kind === 'forest') {
         if (x > -35 || z < -64 || z > 72) continue;
         // A few glades remain between tree clusters.
@@ -531,8 +537,8 @@ function createForest() {
   ];
   const instanced = [];
   for (const mat of fernMats) {const mesh=new THREE.InstancedMesh(fernGeo,mat,480); mesh.castShadow=false;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
-  for (const mat of shrubMats) {const mesh=new THREE.InstancedMesh(shrubGeo,mat,220);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
-  for (const mat of rockMats) {const mesh=new THREE.InstancedMesh(rockGeo,mat,180);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
+  for (const mat of shrubMats) {const mesh=new THREE.InstancedMesh(shrubGeo,mat,220);mesh.castShadow=false;mesh.receiveShadow=false;scene.add(mesh);instanced.push({mesh,count:0});}
+  for (const mat of rockMats) {const mesh=new THREE.InstancedMesh(rockGeo,mat,180);mesh.castShadow=false;mesh.receiveShadow=false;scene.add(mesh);instanced.push({mesh,count:0});}
   const dummy = new THREE.Object3D();
   const place = (entry,x,z,sx,sy,sz) => {
     const y=terrainHeight(x,z);
