@@ -154,15 +154,118 @@ function terrainHeight(x, z) {
 }
 
 function createTerrain() {
-  // Simple walkable ground plane only; all visible woodland dressing comes from imported 3D assets.
-  const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 1, 1);
+  // Fine-grained forest floor with subtle natural variation, kept nearly level for navigation.
+  const segments = 180;
+  const geometry = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, segments, segments);
   geometry.rotateX(-Math.PI / 2);
-  const groundMaterial = new THREE.MeshStandardMaterial({
-    color: '#3b4532', roughness: 1, metalness: 0
-  });
+  const pos = geometry.attributes.position;
+  const colors = [];
+  const colorA = new THREE.Color('#273326');
+  const colorB = new THREE.Color('#46503a');
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const n = Math.sin(x * 0.17) * Math.cos(z * 0.13) * 0.035 + Math.sin((x + z) * 0.47) * 0.012;
+    pos.setY(i, n);
+    const variation = THREE.MathUtils.clamp(0.45 + Math.sin(x * 0.06 + z * 0.035) * 0.2 + Math.sin(z * 0.18) * 0.08, 0, 1);
+    const c = colorA.clone().lerp(colorB, variation);
+    colors.push(c.r, c.g, c.b);
+  }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 });
   ground = new THREE.Mesh(geometry, groundMaterial);
   ground.receiveShadow = true;
   scene.add(ground);
+}
+
+function createDirtPaths() {
+  // Winding packed-earth paths use a detailed noisy canvas texture, not a flat tan strip.
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#594733'; ctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 18000; i++) {
+    const x = random() * 512, y = random() * 512;
+    const shade = Math.floor(55 + random() * 75);
+    ctx.fillStyle = `rgba(${shade},${Math.floor(shade * 0.78)},${Math.floor(shade * 0.56)},${0.08 + random() * 0.24})`;
+    ctx.beginPath(); ctx.ellipse(x, y, 0.4 + random() * 2.4, 0.3 + random() * 1.5, random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+  }
+  for (let i = 0; i < 110; i++) {
+    ctx.strokeStyle = `rgba(27,25,19,${0.06 + random() * 0.12})`;
+    ctx.lineWidth = 0.4 + random() * 1.1;
+    ctx.beginPath(); ctx.moveTo(random() * 512, random() * 512); ctx.lineTo(random() * 512, random() * 512); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1.8, 1.8); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1, color: '#c0aa83', polygonOffset: true, polygonOffsetFactor: -1, side: THREE.DoubleSide });
+  const routes = [
+    [[0,0],[-4,-12],[-11,-22],[-18,-30],[-28,-40],[-42,-48]],
+    [[-18,-30],[-5,-34],[12,-36],[28,-32],[43,-23],[53,-12]],
+    [[12,-36],[16,-48],[28,-61],[43,-73]],
+    [[-28,-40],[-41,-31],[-53,-18],[-61,-3]],
+    [[43,-23],[54,-35],[67,-45],[80,-51]],
+    [[0,0],[9,12],[20,19],[32,24],[43,31]]
+  ];
+  for (const route of routes) {
+    const points = route.map(([x,z]) => new THREE.Vector3(x, 0.075, z));
+    const curve = new THREE.CatmullRomCurve3(points);
+    const divisions = 100, verts = [], uv = [], idx = [];
+    for (let i = 0; i <= divisions; i++) {
+      const t = i / divisions, p = curve.getPoint(t), tangent = curve.getTangent(t).normalize();
+      const side = new THREE.Vector3(-tangent.z, 0, tangent.x);
+      const width = 2.3 + Math.sin(t * Math.PI * 9) * 0.22 + Math.sin(t * 37) * 0.12;
+      verts.push(p.x + side.x * width, p.y, p.z + side.z * width, p.x - side.x * width, p.y, p.z - side.z * width);
+      uv.push(0, t * 8, 1, t * 8);
+      if (i < divisions) { const a = i * 2; idx.push(a,a+1,a+2,a+1,a+3,a+2); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(verts,3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+    const path = new THREE.Mesh(g, mat); path.receiveShadow = true; scene.add(path);
+  }
+}
+
+function createMountains() {
+  // Distant, irregular high-resolution ridges frame the playable woodland without blocking routes.
+  const rng = randomGenerator(40819);
+  const rockMat = new THREE.MeshStandardMaterial({ color: '#62675e', roughness: 1, flatShading: false, vertexColors: true });
+  const ranges = [
+    {x:-112,z:-95,w:40,d:34,h:30},{x:-54,z:-112,w:48,d:38,h:25},
+    {x:8,z:-116,w:48,d:34,h:34},{x:73,z:-105,w:43,d:38,h:28},
+    {x:116,z:-66,w:36,d:44,h:26},{x:-118,z:8,w:32,d:46,h:27},
+    {x:-113,z:76,w:44,d:36,h:31},{x:-48,z:112,w:44,d:34,h:23},
+    {x:22,z:114,w:50,d:38,h:30},{x:91,z:104,w:42,d:38,h:25},{x:118,z:48,w:34,d:42,h:28}
+  ];
+  for (const r of ranges) {
+    const geo = new THREE.PlaneGeometry(r.w, r.d, 42, 42);
+    geo.rotateX(-Math.PI / 2);
+    const p = geo.attributes.position, colors = [];
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i);
+      const edge = Math.max(Math.abs(x) / (r.w * 0.5), Math.abs(z) / (r.d * 0.5));
+      const ridge = Math.max(0, 1 - edge) * r.h;
+      const noise = (Math.sin((x + r.x) * 0.19) + Math.cos((z + r.z) * 0.16) + Math.sin((x + z) * 0.31)) * r.h * 0.07;
+      p.setY(i, Math.max(0, ridge + noise));
+      const c = new THREE.Color('#454c47').lerp(new THREE.Color('#85877c'), THREE.MathUtils.clamp((p.getY(i) / r.h) * 0.85 + rng() * 0.12, 0, 1));
+      colors.push(c.r,c.g,c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors,3)); geo.computeVertexNormals();
+    const mountain = new THREE.Mesh(geo, rockMat); mountain.position.set(r.x, -0.5, r.z); mountain.receiveShadow = true; scene.add(mountain);
+  }
+  // Detailed boulders at the foot of the ridges, built from dense irregular geometry.
+  const rockPalette = ['#555b53','#686b60','#77776a','#454b46'];
+  for (let i = 0; i < 58; i++) {
+    const angle = rng() * Math.PI * 2, radius = 91 + rng() * 27;
+    const x = Math.cos(angle) * radius, z = Math.sin(angle) * radius;
+    const geo = new THREE.IcosahedronGeometry(1, 3);
+    const p = geo.attributes.position;
+    for (let j = 0; j < p.count; j++) {
+      const wobble = 0.78 + rng() * 0.42;
+      p.setXYZ(j, p.getX(j) * wobble, p.getY(j) * (0.65 + rng() * 0.5), p.getZ(j) * wobble);
+    }
+    geo.computeVertexNormals();
+    const rock = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: rockPalette[Math.floor(rng()*rockPalette.length)], roughness: 1, flatShading: true }));
+    const scale = 1.2 + rng() * 4.8; rock.scale.set(scale, scale * (0.55 + rng()*0.6), scale * (0.8 + rng()*0.8));
+    rock.position.set(x, rock.scale.y * 0.45 - 0.2, z); rock.rotation.set(rng()*0.3, rng()*Math.PI, rng()*0.25); rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
+  }
 }
 
 const riverCurve = new THREE.CatmullRomCurve3([
@@ -208,186 +311,6 @@ function createRiver() {
   scene.add(water);
 }
 
-function createTree(x, z, scale = 1) {
-  const y = terrainHeight(x, z);
-  const group = new THREE.Group();
-  group.position.set(x, y, z);
-  group.scale.setScalar(scale);
-
-  const bark = material('#624632', 1, { map: getBarkTexture() });
-  const barkLit = material('#806044', 1, { map: getBarkTexture() });
-  const moss = material('#344b2c', 1);
-  const leafMats = [
-    material('#172f20', 1), material('#203b26', 1),
-    material('#29462b', 1), material('#354f30', 1),
-    material('#405b35', 1), material('#4b6139', 1)
-  ];
-  const trunkHeight = 6.2 + random() * 4.2;
-  const trunkLeanX = (random() - 0.5) * 0.9;
-  const trunkLeanZ = (random() - 0.5) * 0.9;
-
-  // A slightly leaning, irregular trunk built from tapered sections, not one perfect tube.
-  const trunkSegments = 4;
-  for (let s = 0; s < trunkSegments; s++) {
-    const t0 = s / trunkSegments;
-    const t1 = (s + 1) / trunkSegments;
-    const h = trunkHeight / trunkSegments + 0.12;
-    const bottomRadius = 0.62 * (1 - t0 * 0.76);
-    const topRadius = 0.62 * (1 - t1 * 0.76);
-    const segment = addMesh(
-      new THREE.CylinderGeometry(Math.max(0.13, topRadius), bottomRadius, h, 7, 2),
-      s % 2 ? barkLit : bark,
-      trunkLeanX * (t0 + t1) * 0.5,
-      trunkHeight * (t0 + t1) * 0.5,
-      trunkLeanZ * (t0 + t1) * 0.5,
-      group
-    );
-    segment.rotation.z = trunkLeanX / trunkHeight;
-    segment.rotation.x = -trunkLeanZ / trunkHeight;
-    segment.rotation.y = random() * 0.2;
-    segment.castShadow = true;
-    segment.receiveShadow = true;
-  }
-
-  // Exposed roots spread over the forest floor and merge into the trunk base.
-  for (let i = 0; i < 5; i++) {
-    const angle = i * Math.PI * 2 / 5 + random() * 0.45;
-    const length = 1.0 + random() * 1.1;
-    const root = addMesh(
-      new THREE.CylinderGeometry(0.025, 0.24 + random() * 0.12, length, 5),
-      i % 2 ? bark : barkLit,
-      Math.cos(angle) * length * 0.35,
-      0.16,
-      Math.sin(angle) * length * 0.35,
-      group
-    );
-    root.rotation.z = Math.cos(angle) * 1.12;
-    root.rotation.x = Math.sin(angle) * 1.12;
-    root.rotation.y = angle;
-    root.castShadow = true;
-  }
-
-  // Main limbs branch outward and upward from the trunk, breaking the lollipop silhouette.
-  const limbData = [];
-  for (let i = 0; i < 5; i++) {
-    const angle = i * Math.PI * 2 / 5 + random() * 0.6;
-    const startY = trunkHeight * (0.48 + random() * 0.25);
-    const length = 1.9 + random() * 1.8;
-    const rise = 0.8 + random() * 1.4;
-    const start = new THREE.Vector3(trunkLeanX * startY / trunkHeight, startY, trunkLeanZ * startY / trunkHeight);
-    const endPoint = new THREE.Vector3(start.x + Math.cos(angle) * length, startY + rise, start.z + Math.sin(angle) * length);
-    const delta = new THREE.Vector3().subVectors(endPoint, start);
-    const limb = addMesh(
-      new THREE.CylinderGeometry(0.055, 0.19, delta.length(), 5),
-      bark,
-      (start.x + endPoint.x) / 2,
-      (start.y + endPoint.y) / 2,
-      (start.z + endPoint.z) / 2,
-      group
-    );
-    limb.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.clone().normalize());
-    limb.castShadow = true;
-    limbData.push({ x: endPoint.x, y: endPoint.y, z: endPoint.z, angle });
-  }
-
-  // Irregular low-poly leaf clumps make a broken, branching canopy instead of six smooth balls.
-  const leafGeometry = new THREE.IcosahedronGeometry(1, 1);
-  const canopyY = trunkHeight * 0.66;
-  for (let i = 0; i < 18; i++) {
-    const angle = random() * Math.PI * 2;
-    const spread = i < 5 ? 0.8 + random() * 1.5 : 1.5 + random() * 3.0;
-    const radius = 1.0 + random() * 1.25;
-    const cluster = addMesh(
-      leafGeometry,
-      leafMats[Math.floor(random() * leafMats.length)],
-      Math.cos(angle) * spread + trunkLeanX * 0.4,
-      canopyY + (random() - 0.35) * 3.5,
-      Math.sin(angle) * spread + trunkLeanZ * 0.4,
-      group
-    );
-    cluster.scale.set(radius * (0.85 + random() * 0.55), radius * (0.55 + random() * 0.65), radius * (0.8 + random() * 0.65));
-    cluster.rotation.set(random() * 0.8, random() * Math.PI, random() * 0.8);
-    cluster.castShadow = true;
-    cluster.receiveShadow = true;
-  }
-  // Smaller foliage clusters follow the branch tips, so the canopy silhouette stays uneven.
-  for (const limb of limbData) {
-    for (let j = 0; j < 2; j++) {
-      const puff = addMesh(
-        leafGeometry,
-        leafMats[Math.floor(random() * leafMats.length)],
-        limb.x + (random() - 0.5) * 1.6,
-        limb.y + random() * 1.3,
-        limb.z + (random() - 0.5) * 1.6,
-        group
-      );
-      const r = 0.8 + random() * 0.9;
-      puff.scale.set(r * 1.2, r * 0.8, r);
-      puff.rotation.set(random(), random() * Math.PI, random());
-      puff.castShadow = true;
-    }
-  }
-
-  // Moss patches break up the lower bark with muted, non-glossy colour.
-  for (let i = 0; i < 3; i++) {
-    const patch = addMesh(new THREE.IcosahedronGeometry(0.18 + random() * 0.12, 0), moss,
-      (random() - 0.5) * 0.7, 0.8 + random() * 1.7, (random() - 0.5) * 0.7, group);
-    patch.scale.set(0.7, 1.4, 0.35);
-  }
-
-  scene.add(group);
-  obstacles.push({ x, z, radius: 0.85 * scale });
-}
-function createGrass() {
-  // Instanced grass gives the ground a layered, wind-swept surface with only a few draw calls.
-  const bladeGeometry = new THREE.ConeGeometry(0.075, 0.72, 4, 1);
-  bladeGeometry.translate(0, 0.36, 0);
-  const bladeGeometrySmall = new THREE.ConeGeometry(0.052, 0.48, 4, 1);
-  bladeGeometrySmall.translate(0, 0.24, 0);
-  const bladeMaterial = new THREE.MeshStandardMaterial({
-    color: '#9aaa62', roughness: 1, vertexColors: true, side: THREE.DoubleSide
-  });
-  const bladeCount = 2200;
-  const tallGrass = new THREE.InstancedMesh(bladeGeometry, bladeMaterial, bladeCount);
-  const shortGrass = new THREE.InstancedMesh(bladeGeometrySmall, bladeMaterial, bladeCount);
-  const dummy = new THREE.Object3D();
-  const palette = ['#71874b', '#8a9b58', '#536e3d', '#a4a56a', '#647a42'];
-  let placed = 0;
-  let attempts = 0;
-  while (placed < bladeCount && attempts < bladeCount * 3) {
-    attempts++;
-    const x = (random() - 0.5) * 224;
-    const z = (random() - 0.5) * 224;
-    if (Math.hypot(x, z) < 12) continue;
-    const riverPoint = riverCurve.getPoint(THREE.MathUtils.clamp((x + 125) / 250, 0, 1));
-    if (Math.hypot(x - riverPoint.x, z - riverPoint.z) < 5.5) continue;
-    // Keep grass away from tree trunks and boulders so the player can still read the terrain.
-    if (obstacles.some(o => Math.hypot(x - o.x, z - o.z) < o.radius + 0.45)) continue;
-    const y = terrainHeight(x, z) + 0.025;
-    const scale = 0.55 + random() * 1.0;
-    dummy.position.set(x, y, z);
-    dummy.rotation.set((random() - 0.5) * 0.16, random() * Math.PI, (random() - 0.5) * 0.28);
-    dummy.scale.set(scale, scale, scale);
-    dummy.updateMatrix();
-    tallGrass.setMatrixAt(placed, dummy.matrix);
-    tallGrass.setColorAt(placed, new THREE.Color(palette[Math.floor(random() * palette.length)]));
-    dummy.position.set(x + (random() - 0.5) * 0.22, y, z + (random() - 0.5) * 0.22);
-    dummy.rotation.set((random() - 0.5) * 0.18, random() * Math.PI, (random() - 0.5) * 0.3);
-    dummy.scale.setScalar(scale * (0.65 + random() * 0.35));
-    dummy.updateMatrix();
-    shortGrass.setMatrixAt(placed, dummy.matrix);
-    shortGrass.setColorAt(placed, new THREE.Color(palette[Math.floor(random() * palette.length)]));
-    placed++;
-  }
-  tallGrass.count = placed;
-  shortGrass.count = placed;
-  tallGrass.instanceMatrix.needsUpdate = true;
-  shortGrass.instanceMatrix.needsUpdate = true;
-  tallGrass.receiveShadow = true;
-  shortGrass.receiveShadow = true;
-  scene.add(tallGrass, shortGrass);
-}
-
 function createForest() {
   // Rebuild the forest from separate CC0 GLB models, with deliberate gaps and a clear river corridor.
   // No generated cylinders, spheres, or primitive foliage are used as trees or plants.
@@ -399,13 +322,12 @@ function createForest() {
     log: 'https://cdn.3dassets.dev/assets/36143/v1/model.glb',
   };
   const cache = new Map();
-  const loadModel = url => new Promise((resolve, reject) => {
-    if (cache.has(url)) { resolve(cache.get(url)); return; }
-    loader.load(url, gltf => {
-      cache.set(url, gltf.scene);
-      resolve(gltf.scene);
-    }, undefined, reject);
-  });
+  const loadModel = url => {
+    if (cache.has(url)) return cache.get(url);
+    const promise = new Promise((resolve, reject) => loader.load(url, gltf => resolve(gltf.scene), undefined, reject));
+    cache.set(url, promise);
+    return promise;
+  };
   const addInstance = async (url, x, z, scale, rotation = 0, name = 'ForestAsset') => {
     try {
       const template = await loadModel(url);
@@ -546,6 +468,8 @@ function setupScene() {
   scene.add(sun);
 
   createTerrain();
+  createDirtPaths();
+  createMountains();
   createRiver();
   createForest();
   createPlayer();
