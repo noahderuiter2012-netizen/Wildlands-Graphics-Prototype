@@ -207,19 +207,31 @@ function createTerrain() {
   canvas.width = canvas.height = 512;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#77735a'; ctx.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 26000; i++) {
-    const x = random() * 512, y = random() * 512;
-    const kind = random();
-    if (kind < 0.38) ctx.fillStyle = `rgba(38,48,31,${0.06 + random()*0.2})`;
-    else if (kind < 0.70) ctx.fillStyle = `rgba(132,104,66,${0.06 + random()*0.22})`;
-    else ctx.fillStyle = `rgba(177,164,119,${0.04 + random()*0.17})`;
+  // Multi-scale soil variation: damp earth, broken leaves and pale mineral flecks.
+  const groundRng = randomGenerator(81273);
+  for (let i = 0; i < 30000; i++) {
+    const x = groundRng() * 512, y = groundRng() * 512;
+    const kind = groundRng();
+    if (kind < 0.34) ctx.fillStyle = `rgba(29,39,27,${0.05 + groundRng()*0.19})`;
+    else if (kind < 0.62) ctx.fillStyle = `rgba(119,87,52,${0.05 + groundRng()*0.21})`;
+    else if (kind < 0.86) ctx.fillStyle = `rgba(177,161,112,${0.035 + groundRng()*0.15})`;
+    else ctx.fillStyle = `rgba(177,188,163,${0.025 + groundRng()*0.12})`;
     ctx.beginPath();
-    ctx.ellipse(x, y, 0.5 + random()*2.6, 0.25 + random()*1.1, random()*Math.PI, 0, Math.PI*2);
+    ctx.ellipse(x, y, 0.45 + groundRng()*3.0, 0.22 + groundRng()*1.5, groundRng()*Math.PI, 0, Math.PI*2);
     ctx.fill();
   }
-  for (let i = 0; i < 180; i++) {
-    ctx.strokeStyle = `rgba(35,31,23,${0.06 + random()*0.12})`; ctx.lineWidth = 0.4 + random()*1.1;
-    ctx.beginPath(); ctx.moveTo(random()*512, random()*512); ctx.lineTo(random()*512, random()*512); ctx.stroke();
+  // Individual leaf fragments and twig marks add scale cues near the ground.
+  for (let i = 0; i < 1100; i++) {
+    const x = groundRng() * 512, y = groundRng() * 512;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(groundRng()*Math.PI);
+    ctx.fillStyle = `rgba(${70+groundRng()*50},${48+groundRng()*34},${27+groundRng()*22},${0.12+groundRng()*0.24})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, 1.6+groundRng()*3.8, 0.35+groundRng()*1.0, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for (let i = 0; i < 230; i++) {
+    const x = groundRng()*512, y = groundRng()*512;
+    ctx.strokeStyle = `rgba(31,29,23,${0.07+groundRng()*0.13})`; ctx.lineWidth = 0.4+groundRng()*0.8;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(groundRng()-0.5)*10,y+(groundRng()-0.5)*4); ctx.stroke();
   }
   const floorTexture = new THREE.CanvasTexture(canvas);
   floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
@@ -237,16 +249,23 @@ function createDirtPaths() {
   canvas.width = 512; canvas.height = 512;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#594733'; ctx.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 18000; i++) {
+  for (let i = 0; i < 22000; i++) {
     const x = random() * 512, y = random() * 512;
-    const shade = Math.floor(55 + random() * 75);
-    ctx.fillStyle = `rgba(${shade},${Math.floor(shade * 0.78)},${Math.floor(shade * 0.56)},${0.08 + random() * 0.24})`;
+    const shade = Math.floor(42 + random() * 92);
+    ctx.fillStyle = `rgba(${shade},${Math.floor(shade * 0.78)},${Math.floor(shade * 0.56)},${0.06 + random() * 0.23})`;
     ctx.beginPath(); ctx.ellipse(x, y, 0.4 + random() * 2.4, 0.3 + random() * 1.5, random() * Math.PI, 0, Math.PI * 2); ctx.fill();
   }
   for (let i = 0; i < 110; i++) {
     ctx.strokeStyle = `rgba(27,25,19,${0.06 + random() * 0.12})`;
     ctx.lineWidth = 0.4 + random() * 1.1;
     ctx.beginPath(); ctx.moveTo(random() * 512, random() * 512); ctx.lineTo(random() * 512, random() * 512); ctx.stroke();
+  }
+  // Small crushed stones and twig traces break up the packed-earth path.
+  for (let i = 0; i < 420; i++) {
+    const x = random() * 512, y = random() * 512;
+    ctx.strokeStyle = `rgba(${35 + random() * 35},${28 + random() * 28},${19 + random() * 20},${0.12 + random() * 0.2})`;
+    ctx.lineWidth = 0.5 + random() * 1.2;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(random()-0.5)*9,y+(random()-0.5)*4); ctx.stroke();
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1.8, 1.8); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
