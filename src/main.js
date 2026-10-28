@@ -134,12 +134,20 @@ function createTerrain() {
   geometry.computeVertexNormals();
 
   const colors = [];
-  const green = new THREE.Color('#304a2c');
-  const darkGreen = new THREE.Color('#182b20');
+  const green = new THREE.Color('#40583a');
+  const darkGreen = new THREE.Color('#18271d');
+  const mossGreen = new THREE.Color('#596747');
+  const forestSoil = new THREE.Color('#302e24');
 
   for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
     const y = positions.getY(i);
-    const c = green.clone().lerp(darkGreen, THREE.MathUtils.clamp(y / 8, 0, 0.6));
+    const variation = Math.sin(x * 0.12 + z * 0.07) * Math.cos(z * 0.11 - x * 0.04);
+    const mossAmount = THREE.MathUtils.clamp((variation - 0.05) * 0.8, 0, 0.65);
+    const soilAmount = THREE.MathUtils.clamp((-variation - 0.35) * 0.4, 0, 0.3);
+    const heightShade = THREE.MathUtils.clamp((y + 3) / 10, 0, 0.45);
+    const c = darkGreen.clone().lerp(green, 0.45 + heightShade).lerp(mossGreen, mossAmount).lerp(forestSoil, soilAmount);
     colors.push(c.r, c.g, c.b);
   }
 
@@ -279,19 +287,25 @@ function createTree(x, z, scale = 1) {
   );
   trunk.rotation.z = (random() - 0.5) * 0.07;
 
-  const crownY = trunkHeight * 0.55;
-  for (let layer = 0; layer < 3; layer++) {
-    const radius = (2.6 - layer * 0.55) * (0.85 + random() * 0.3);
-    const height = 3.8 - layer * 0.25;
+  const crownY = trunkHeight * 0.48;
+  const layerCount = 5;
+
+  for (let layer = 0; layer < layerCount; layer++) {
+    const progress = layer / layerCount;
+    const radius = (2.9 * (1 - progress) + 0.35) * (0.82 + random() * 0.32);
+    const height = 2.7 + random() * 1.1;
     const crown = addMesh(
-      new THREE.ConeGeometry(radius, height, 7),
+      new THREE.ConeGeometry(radius, height, 9, 2),
       leaves[Math.floor(random() * leaves.length)],
-      (random() - 0.5) * 0.7,
-      crownY + layer * 1.7,
-      (random() - 0.5) * 0.7,
+      (random() - 0.5) * 0.9,
+      crownY + layer * 1.15,
+      (random() - 0.5) * 0.9,
       group
     );
     crown.rotation.y = random() * Math.PI;
+    crown.rotation.z = (random() - 0.5) * 0.09;
+    crown.castShadow = true;
+    crown.receiveShadow = true;
   }
 
   // A few low branches make the silhouette less uniform.
@@ -423,8 +437,8 @@ function createPlayer() {
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#a5b9a6');
-  scene.fog = new THREE.FogExp2('#a5b9a6', 0.0085);
+  scene.background = new THREE.Color('#9bb3a2');
+  scene.fog = new THREE.FogExp2('#9bb3a2', 0.0072);
 
   camera = new THREE.PerspectiveCamera(
     65,
@@ -438,13 +452,13 @@ function setupScene() {
     powerPreference: 'high-performance'
   });
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.15;
   game.prepend(renderer.domElement);
 
   clock = new THREE.Clock();
