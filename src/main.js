@@ -324,12 +324,20 @@ function createMountains() {
       const envelope = Math.max(0, 1 - edge * edge);
       const spine = Math.exp(-Math.pow((lx + Math.sin(lz*0.08)*r.w*0.12)/(r.w*0.22),2));
       const crags = Math.abs(Math.sin((lx+r.x)*0.27)*Math.cos((lz+r.z)*0.23)) * r.h*0.12 + Math.sin((lx+lz)*0.47)*r.h*0.035;
-      const height = Math.max(0, envelope * (r.h * (0.48 + spine*0.52)) + crags*envelope);
+      // Narrow erosion cuts and fractured shoulders break the repeated cone-like silhouettes.
+      const strata = Math.sin((lx+r.x)*0.78 + Math.sin((lz+r.z)*0.19)*2.2) * 0.42
+        + Math.sin((lz+r.z)*0.61 + Math.sin((lx+r.x)*0.13)) * 0.28;
+      const height = Math.max(0, envelope * (r.h * (0.48 + spine*0.52)) + crags*envelope + strata*envelope);
       p.setY(i, height);
       const relative = height / r.h;
-      const rock = new THREE.Color('#373d3b').lerp(new THREE.Color('#85877e'), THREE.MathUtils.clamp(relative*1.2 + rng()*0.08,0,1));
-      if (relative > snowline) {
-        const snowBlend = THREE.MathUtils.clamp((relative-snowline)*4.2 + rng()*0.08,0,0.94);
+      const rockNoise = Math.sin((lx+r.x)*0.33)*Math.cos((lz+r.z)*0.29)*0.5 + Math.sin((lx-lz)*0.71)*0.18;
+      const rock = new THREE.Color('#303633').lerp(new THREE.Color('#85877e'), THREE.MathUtils.clamp(relative*1.08 + rockNoise*0.12 + rng()*0.035,0,1));
+      // Wind-scoured snow follows ledges and high shelves instead of forming a clean height band.
+      const snowNoise = Math.sin((lx+r.x)*0.22 + Math.sin((lz+r.z)*0.16)*1.8)*0.19
+        + Math.cos((lz+r.z)*0.31 - (lx+r.x)*0.08)*0.12 + rockNoise*0.07;
+      const snowThreshold = snowline + snowNoise;
+      if (relative > snowThreshold) {
+        const snowBlend = THREE.MathUtils.clamp((relative-snowThreshold)*4.6 + Math.max(0,snowNoise)*0.32 + rng()*0.035,0,0.96);
         rock.lerp(new THREE.Color('#d8e0dd'), snowBlend);
       }
       colors.push(rock.r,rock.g,rock.b);
