@@ -608,8 +608,9 @@ function createPlayer() {
 
 function setupScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#9eafa0');
-  scene.fog = new THREE.FogExp2('#9eafa0', 0.0062);
+  // Moody blue-green distance haze keeps the far ridges atmospheric without hiding landmarks.
+  scene.background = new THREE.Color('#718078');
+  scene.fog = new THREE.FogExp2('#718078', 0.0054);
 
   camera = new THREE.PerspectiveCamera(
     65,
@@ -629,19 +630,22 @@ function setupScene() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.0;
   game.prepend(renderer.domElement);
 
   clock = new THREE.Clock();
 
-  scene.add(new THREE.HemisphereLight('#dce8d4', '#263126', 1.35));
+  scene.add(new THREE.HemisphereLight('#c4d6d4', '#18211f', 0.92));
 
-  // A soft green fill keeps shaded trunks and foliage readable under the canopy.
-  const forestFill = new THREE.DirectionalLight('#b8cda6', 0.38);
+  // Cool forest bounce and a restrained warm key light create a cinematic fantasy palette.
+  const forestFill = new THREE.DirectionalLight('#91b5a0', 0.32);
   forestFill.position.set(28, 24, 18);
   scene.add(forestFill);
+  const coolRim = new THREE.DirectionalLight('#9ab9d1', 0.42);
+  coolRim.position.set(55, 32, -48);
+  scene.add(coolRim);
 
-  const sun = new THREE.DirectionalLight('#ffe4bd', 2.1);
+  const sun = new THREE.DirectionalLight('#f6d8ae', 1.75);
   sun.position.set(-35, 65, -25);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1536, 1536);
