@@ -486,3 +486,30 @@ button {
   background: #a7d879;
   color: #142218;
 }
+
+
+/* Official Three.js WebXR entry button: visible above the game overlay on Quest browsers. */
+#enterVRButton {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  right: auto;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(260px, calc(100vw - 36px));
+  padding: 13px 18px;
+  border: 1px solid rgba(188, 225, 155, 0.75);
+  border-radius: 3px;
+  background: rgba(17, 39, 24, 0.94);
+  color: #edf8e4;
+  font: 700 12px 'DM Sans', sans-serif;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
+  cursor: pointer;
+}
+
+#enterVRButton:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
