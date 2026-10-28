@@ -310,12 +310,13 @@ function createMountains() {
     rock.position.set(x, rock.scale.y * 0.45 - 0.2, z); rock.rotation.set(rng()*0.3, rng()*Math.PI, rng()*0.25); rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
   }
   // Volcanic Region landmark: a dark, broad cone with a glowing crater and branching lava scars.
+  const volcanoBase = terrainHeight(91, -71);
   const volcano = new THREE.Mesh(new THREE.ConeGeometry(24, 30, 48, 8, false), new THREE.MeshStandardMaterial({color:'#302d2a', roughness:1, flatShading:true}));
-  volcano.position.set(91, 9, -71); volcano.scale.set(1.2, 1, 1.05); volcano.castShadow = true; volcano.receiveShadow = true; scene.add(volcano);
+  volcano.position.set(91, volcanoBase + 15, -71); volcano.scale.set(1.2, 1, 1.05); volcano.castShadow = true; volcano.receiveShadow = true; scene.add(volcano);
   const lavaMat = new THREE.MeshStandardMaterial({color:'#ff5a18', emissive:'#e33108', emissiveIntensity:2.2, roughness:0.45});
-  const crater = new THREE.Mesh(new THREE.TorusGeometry(4.8, 1.05, 8, 32), lavaMat); crater.rotation.x = Math.PI/2; crater.position.set(91, 23.2, -71); scene.add(crater);
+  const crater = new THREE.Mesh(new THREE.TorusGeometry(4.8, 1.05, 8, 32), lavaMat); crater.rotation.x = Math.PI/2; crater.position.set(91, volcanoBase + 29.2, -71); scene.add(crater);
   for (const path of [[91,-71,83,-54],[91,-71,101,-82],[91,-71,107,-61],[91,-71,78,-83]]) {
-    const pts = [new THREE.Vector3(path[0],20,path[1]),new THREE.Vector3((path[0]+path[2])/2,9,(path[1]+path[3])/2),new THREE.Vector3(path[2],terrainHeight(path[2],path[3])+0.3,path[3])];
+    const pts = [new THREE.Vector3(path[0],volcanoBase+24,path[1]),new THREE.Vector3((path[0]+path[2])/2,terrainHeight((path[0]+path[2])/2,(path[1]+path[3])/2)+3,(path[1]+path[3])/2),new THREE.Vector3(path[2],terrainHeight(path[2],path[3])+0.3,path[3])];
     const lava = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),18,0.42,6,false),lavaMat); scene.add(lava);
   }
   // Cursed Lands boundary stones: weathered pillars with restrained violet energy.
@@ -779,7 +780,7 @@ function movePlayer(delta) {
   document.querySelector('#coordinates').textContent =
     `X ${Math.round(player.position.x)} · Z ${Math.round(player.position.z)}`;
   const px = player.position.x, pz = player.position.z;
-  const region = pz < -79 ? 'SNOWY PEAKS' : (px > 62 && pz < -43 ? 'VOLCANIC REGION' : (Math.hypot((px+7)/1.05, pz+20) < 35 ? 'CURSED LANDS' : (px < -42 && pz < 62 ? 'ANCIENT FOREST' : (pz > 53 ? 'RIVERLANDS' : (px > 35 ? 'GRASSLANDS' : (px < -76 ? 'MOUNTAINS' : 'THE WILDS'))))));
+  const region = pz < -79 ? 'SNOWY PEAKS' : (px > 62 && pz < -43 ? 'VOLCANIC REGION' : (px < -82 && pz < 20 ? 'MOUNTAINS' : (Math.hypot((px+7)/1.05, pz+20) < 35 ? 'CURSED LANDS' : (px < -42 && pz < 62 ? 'ANCIENT FOREST' : (pz > 53 ? 'RIVERLANDS' : (px > 35 ? 'GRASSLANDS' : 'THE WILDS'))))));
   document.querySelector('#location').textContent = '✦ ' + region;
 
   if (sprinting) message.textContent = 'Moving fast — stamina draining.';
