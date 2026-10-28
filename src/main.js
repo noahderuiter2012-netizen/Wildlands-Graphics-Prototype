@@ -495,8 +495,9 @@ function createForest() {
     gltf => {
       const woodland = gltf.scene;
       woodland.name = 'PrebuiltTemperateWoodland';
-      woodland.scale.setScalar(3.25);
-      woodland.position.set(0, -0.1, -5);
+      // Keep the imported grove readable instead of filling the whole view with overlapping foliage.
+      woodland.scale.setScalar(2.35);
+      woodland.position.set(0, -0.1, -24);
       woodland.traverse(object => {
         if (!object.isMesh) return;
         object.castShadow = true;
@@ -504,7 +505,7 @@ function createForest() {
         // Keep source materials and colour variation; do not flatten the pack into one tint.
       });
       scene.add(woodland);
-      forestStatus.textContent = 'Forest assets loaded.';
+      forestStatus.textContent = 'Forest assets loaded — follow the open ground into the woodland.';
     },
     undefined,
     error => {
