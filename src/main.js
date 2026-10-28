@@ -455,8 +455,10 @@ function createForest() {
       model.scale.setScalar(scale);
       model.traverse(o => {
         if (!o.isMesh) return;
-        o.castShadow = true;
-        o.receiveShadow = true;
+        // Imported foliage is expensive as a per-object shadow caster in standalone VR.
+        // Keep its visible silhouette and material; use shared scene lighting for shape.
+        o.castShadow = false;
+        o.receiveShadow = false;
       });
       // Imported GLBs use different origins. Align their actual lowest point to the terrain
       // so trunks and fallen logs do not float above or sink beneath uneven ground.
@@ -631,7 +633,7 @@ function setupScene() {
     powerPreference: 'high-performance'
   });
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.15));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -682,7 +684,7 @@ function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.15));
 }
 
 function beginGame() {
@@ -954,9 +956,8 @@ function animate() {
     updateCamera(delta);
   }
 
-  // Slow, subtle variation in the forest atmosphere.
-  const fogPulse = 0.0082 + Math.sin(worldTime * 0.08) * 0.00022;
-  scene.fog.density = fogPulse;
+  // Stable distance haze keeps regional landmarks readable and avoids unnecessary per-frame changes.
+  scene.fog.density = 0.0054;
 
   renderer.render(scene, camera);
 }
