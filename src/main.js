@@ -33,7 +33,7 @@ app.innerHTML = `
         <h1>THE LIVING<br><span>FOREST</span></h1>
         <p>Ancient trees. Forgotten waters. A wilderness waiting to be explored.</p>
         <button id="startButton">ENTER THE WILDS <span>→</span></button>
-        <div class="controls-note">WASD TO MOVE · SHIFT TO SPRINT · DRAG TO LOOK</div>
+        <div class="controls-note">WASD TO MOVE · SPACE TO JUMP · SHIFT TO SPRINT · DRAG TO LOOK</div>
       </div>
     </div>
 
@@ -45,6 +45,7 @@ app.innerHTML = `
     <div id="touch-controls">
       <div id="joystick"><div id="stick"></div></div>
       <button id="sprintButton">SPRINT</button>
+      <button id="jumpButton" aria-label="Jump">JUMP</button>
     </div>
 
     <div id="error" hidden></div>
@@ -62,6 +63,9 @@ let player, playerGroup, ground;
 let running = false;
 let gameStarted = false;
 let stamina = 100;
+let jumpVelocity = 0;
+let jumpHeight = 0;
+let jumpRequested = false;
 let yaw = 0;
 let pitch = 0.22;
 let cameraDistance = 6.5;
@@ -594,6 +598,7 @@ function setupControls() {
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
       event.preventDefault();
     }
+    if (event.code === 'Space' && !event.repeat && gameStarted) jumpRequested = true;
 
     if (event.code === 'Escape' && gameStarted) {
       intro.classList.remove('hidden');
@@ -631,6 +636,11 @@ function setupControls() {
   // Virtual joystick.
   const joystick = document.querySelector('#joystick');
   const stick = document.querySelector('#stick');
+  const jumpButton = document.querySelector('#jumpButton');
+  jumpButton.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    if (gameStarted) jumpRequested = true;
+  });
 
   const updateJoystick = event => {
     const rect = joystick.getBoundingClientRect();
@@ -693,6 +703,13 @@ function setupControls() {
 function movePlayer(delta) {
   if (!gameStarted) return;
 
+  // Jump is a one-shot request; gravity returns the player to the terrain.
+  if (jumpRequested && jumpHeight <= 0.001) jumpVelocity = 8.2;
+  jumpRequested = false;
+  jumpVelocity -= 20 * delta;
+  jumpHeight = Math.max(0, jumpHeight + jumpVelocity * delta);
+  if (jumpHeight === 0) jumpVelocity = 0;
+
   const forwardInput =
     (keys.KeyW || keys.ArrowUp ? 1 : 0) -
     (keys.KeyS || keys.ArrowDown ? 1 : 0) -
@@ -744,7 +761,7 @@ function movePlayer(delta) {
     player.rotation.y = Math.atan2(-direction.x, -direction.z);
   }
 
-  player.position.y = terrainHeight(player.position.x, player.position.z);
+  player.position.y = terrainHeight(player.position.x, player.position.z) + jumpHeight;
 
   document.querySelector('#staminaBar').style.width = `${stamina}%`;
   document.querySelector('#staminaText').textContent = Math.round(stamina);
