@@ -473,7 +473,11 @@ function setupScene() {
   sun.shadow.camera.right = 45;
   sun.shadow.camera.top = 45;
   sun.shadow.camera.bottom = -45;
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 150;
   sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.025;
+  sun.shadow.radius = 3;
   scene.add(sun);
 
   createTerrain();
@@ -489,7 +493,7 @@ function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
 }
 
 function beginGame() {
