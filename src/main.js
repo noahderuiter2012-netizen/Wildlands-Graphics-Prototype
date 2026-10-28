@@ -378,11 +378,11 @@ function createRiver() {
 }
 
 function createForest() {
-  // Rebuild the forest from separate CC0 GLB models, with deliberate gaps and a clear river corridor.
-  // No generated cylinders, spheres, or primitive foliage are used as trees or plants.
+  // Regional forest dressing: dense woodland in the west, sparse trees on open grassland,
+  // wind-shaped trees near snow, and scorched sparse growth near the volcano.
   const loader = new GLTFLoader();
   const status = document.querySelector('#message');
-  status.textContent = 'Loading realistic woodland models…';
+  status.textContent = 'Loading woodland and regional vegetation…';
   const assets = {
     tree: 'https://cdn.3dassets.dev/assets/36137/v1/model.glb',
     log: 'https://cdn.3dassets.dev/assets/36143/v1/model.glb',
@@ -399,7 +399,7 @@ function createForest() {
       const template = await loadModel(url);
       const model = template.clone(true);
       model.name = name;
-      model.position.set(x, 0, z);
+      model.position.set(x, terrainHeight(x, z), z);
       model.rotation.y = rotation;
       model.scale.setScalar(scale);
       model.traverse(o => {
@@ -408,37 +408,109 @@ function createForest() {
         o.receiveShadow = true;
       });
       scene.add(model);
-      // Coarse trunk collision for the player.
-      if (name.includes('Tree')) obstacles.push({ x, z, radius: 1.4 * scale });
+      if (name.includes('Tree')) obstacles.push({ x, z, radius: 1.15 * scale });
     } catch (error) {
       console.error('Forest model failed to load:', url, error);
       status.textContent = 'Some woodland models failed to load. Reload with a stable connection.';
     }
   };
-  // Main trees form loose groups rather than a continuous wall. The centre and river stay open.
-  const treeSpots = [
-    [-32,-38,1.0],[-22,-47,0.82],[-43,-54,1.08],[-10,-44,0.88],
-    [18,-52,1.02],[31,-43,0.86],[44,-56,1.06],[53,-38,0.9],
-    [-48,-15,0.94],[-38,2,1.05],[-51,20,0.82],[-35,36,1.0],
-    [43,6,0.95],[51,24,1.06],[37,39,0.84],[53,48,1.0],
-    [-30,58,0.82],[-12,63,1.0],[12,58,0.9],[28,65,1.05],
-    [-68,-38,1.05],[-73,-10,0.9],[-69,21,1.0],[70,-31,0.9],[73,7,1.05],[69,37,0.86],
-    [-90,-58,1.0],[-96,-24,0.9],[-91,15,1.05],[-86,52,0.95],
-    [92,-53,1.0],[97,-14,0.9],[91,25,1.06],[88,55,0.92]
+
+  // Pre-sample the stream once so placement doesn't repeatedly rebuild its curve points.
+  const streamPoints = riverCurve.getPoints(80);
+  const distanceToRiver = (x, z) => streamPoints.reduce((best, p) => Math.min(best, Math.hypot(x-p.x, z-p.z)), Infinity);
+  const rng = randomGenerator(77031);
+  const treeCandidates = [];
+  const addRegionTrees = (count, bounds, kind) => {
+    let attempts = 0, added = 0;
+    while (added < count && attempts < count * 12) {
+      attempts++;
+      const x = bounds.x0 + rng() * (bounds.x1 - bounds.x0);
+      const z = bounds.z0 + rng() * (bounds.z1 - bounds.z0);
+      if (Math.hypot(x, z) < 15 || distanceToRiver(x, z) < 7.5) continue;
+      if (kind === 'forest') {
+        if (x > -35 || z < -64 || z > 72) continue;
+        // A few glades remain between tree clusters.
+        if (rng() < 0.16 && Math.hypot(x + 72, z - 4) < 35) continue;
+      } else if (kind === 'grass') {
+        if (x < 35 || z < -40 || z > 58 || rng() < 0.56) continue;
+      } else if (kind === 'snow') {
+        if (z > -73 || rng() < 0.42) continue;
+      } else if (kind === 'volcanic') {
+        if (x < 68 || z > -38 || Math.hypot(x-91,z+71)<31 || rng() < 0.7) continue;
+      }
+      treeCandidates.push({x,z,kind}); added++;
+    }
+  };
+  addRegionTrees(76,{x0:-108,x1:-32,z0:-68,z1:73},'forest');
+  addRegionTrees(20,{x0:34,x1:112,z0:-36,z1:57},'grass');
+  addRegionTrees(19,{x0:-86,x1:79,z0:-126,z1:-72},'snow');
+  addRegionTrees(8,{x0:66,x1:119,z0:-111,z1:-39},'volcanic');
+  // Trees have scale, rotation and spacing variation to break repeated silhouettes.
+  treeCandidates.forEach(({x,z,kind},i) => {
+    const scale = kind === 'snow' ? 0.72 + rng()*0.38 : kind === 'volcanic' ? 0.62 + rng()*0.32 : 0.72 + rng()*0.62;
+    addInstance(assets.tree,x,z,scale,rng()*Math.PI*2,'ImportedTree');
+  });
+
+  // Instanced understory adds many small details with few draw calls: fern-like fronds,
+  // low shrubs, mossy stones and leaf-litter clumps. Keep clear of the central start and paths.
+  const fernGeo = new THREE.ConeGeometry(0.18, 1.15, 5, 1);
+  fernGeo.translate(0,0.48,0);
+  const fernMats = [
+    new THREE.MeshStandardMaterial({color:'#263f2b',roughness:1}),
+    new THREE.MeshStandardMaterial({color:'#3e5634',roughness:1}),
+    new THREE.MeshStandardMaterial({color:'#586442',roughness:1})
   ];
-  for (let i = 0; i < treeSpots.length; i++) {
-    const [x,z,s] = treeSpots[i];
-    // Leave a broad open start area and a clear strip around the stream.
-    if (Math.hypot(x,z) < 17) continue;
-    const nearestRiver = riverCurve.getPoints(32).reduce((best,p) => Math.min(best, Math.hypot(x-p.x,z-p.z)), Infinity);
-    if (nearestRiver < 9) continue;
-    addInstance(assets.tree, x, z, s, (i * 1.71) % (Math.PI * 2), 'ImportedTree');
+  const shrubGeo = new THREE.IcosahedronGeometry(0.8,1);
+  const shrubMats = [
+    new THREE.MeshStandardMaterial({color:'#34472c',roughness:1,flatShading:true}),
+    new THREE.MeshStandardMaterial({color:'#4a5734',roughness:1,flatShading:true})
+  ];
+  const rockGeo = new THREE.IcosahedronGeometry(0.8,2);
+  const rockMats = [
+    new THREE.MeshStandardMaterial({color:'#555a50',roughness:1,flatShading:true}),
+    new THREE.MeshStandardMaterial({color:'#77766a',roughness:1,flatShading:true})
+  ];
+  const instanced = [];
+  for (const mat of fernMats) {const mesh=new THREE.InstancedMesh(fernGeo,mat,480); mesh.castShadow=false;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
+  for (const mat of shrubMats) {const mesh=new THREE.InstancedMesh(shrubGeo,mat,220);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
+  for (const mat of rockMats) {const mesh=new THREE.InstancedMesh(rockGeo,mat,180);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);instanced.push({mesh,count:0});}
+  const dummy = new THREE.Object3D();
+  const place = (entry,x,z,sx,sy,sz) => {
+    const y=terrainHeight(x,z);
+    dummy.position.set(x,y,z);dummy.rotation.set((rng()-0.5)*0.18,rng()*Math.PI*2,(rng()-0.5)*0.18);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();
+    entry.mesh.setMatrixAt(entry.count++,dummy.matrix);
+  };
+  for(let i=0;i<480;i++){
+    const x=-110+rng()*220,z=-120+rng()*240;
+    if(Math.hypot(x,z)<12 || distanceToRiver(x,z)<4.5) continue;
+    const forest=Math.hypot((x+72)*0.82,z-4)<62;
+    const snow=z < -78, volcanic=x>68&&z < -40, grass=x>32&&z> -42;
+    if(!forest&&!grass&&!snow&&!volcanic&&rng()<0.55) continue;
+    const entry=instanced[Math.floor(rng()*3)];
+    place(entry,x,z,0.55+rng()*0.9,0.55+rng()*0.95,0.55+rng()*0.9);
   }
-  const logs = [[-26,-30,1.0],[25,-31,0.85],[-57,31,0.9],[59,35,1.0],[-78,2,0.8],[81,-5,0.9]];
+  for(let i=0;i<220;i++){
+    const x=-112+rng()*224,z=-120+rng()*240;
+    if(Math.hypot(x,z)<14||distanceToRiver(x,z)<5) continue;
+    const entry=instanced[3+Math.floor(rng()*2)];
+    const scale=0.45+rng()*0.75;
+    place(entry,x,z,scale,scale*(0.45+rng()*0.45),scale);
+  }
+  for(let i=0;i<180;i++){
+    const x=-116+rng()*232,z=-122+rng()*244;
+    if(Math.hypot(x,z)<13||distanceToRiver(x,z)<3.5) continue;
+    const entry=instanced[5+Math.floor(rng()*2)];
+    const scale=0.35+rng()*1.1;
+    place(entry,x,z,scale,scale*(0.45+rng()*0.5),scale*(0.75+rng()*0.6));
+  }
+  for(const entry of instanced) entry.mesh.count=entry.count;
+
+  // Fallen logs now sit on the actual terrain instead of floating at sea level.
+  const logs = [[-26,-30,1.0],[-49,42,0.85],[-83,28,0.9],[55,35,1.0],[82,5,0.8],[-68,-12,0.9]];
   logs.forEach(([x,z,s],i) => addInstance(assets.log,x,z,s,(i*1.1)%Math.PI,'ImportedFallenLog'));
   Promise.allSettled([...cache.values()]).then(results => {
     const failed = results.filter(r => r.status === 'rejected').length;
-    status.textContent = failed ? 'Some forest assets failed to load — check connection.' : 'Forest assets loaded. Explore the river corridor.';
+    status.textContent = failed ? 'Some forest assets failed to load — check connection.' : 'Woodland loaded. Explore the regions.';
   });
 }
 
